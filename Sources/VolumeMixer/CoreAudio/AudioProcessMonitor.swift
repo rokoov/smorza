@@ -38,7 +38,8 @@ final class AudioProcessMonitor {
         let objectIDs = (try? AudioObjectID.system.readObjectIDs(kAudioHardwarePropertyProcessObjectList)) ?? []
         var clients: [AudioObjectID: AudioClient] = [:]
         for objectID in objectIDs {
-            guard let pid = try? objectID.read(kAudioProcessPropertyPID, initial: pid_t(0)), pid > 0, pid != ownPID else { continue }
+            guard let pid = try? objectID.read(kAudioProcessPropertyPID, initial: pid_t(0)), pid > 0, pid != ownPID
+            else { continue }
             let bundleID: String?
             if let existing = known[objectID], existing.pid == pid {
                 bundleID = existing.bundleID
@@ -60,7 +61,8 @@ final class AudioProcessMonitor {
         for objectID in next.keys where playingListeners[objectID] == nil {
             // macOS announces IsRunning but changes IsRunningOutput without a notification
             // (checked on macOS 26.3), so either one triggers a fresh read of every client.
-            playingListeners[objectID] = [kAudioProcessPropertyIsRunning, kAudioProcessPropertyIsRunningOutput].map { selector in
+            playingListeners[objectID] = [kAudioProcessPropertyIsRunning, kAudioProcessPropertyIsRunningOutput].map {
+                selector in
                 PropertyListener(objectID, selector) { [weak self] in
                     self?.refreshPlaying()
                 }

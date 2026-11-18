@@ -18,7 +18,8 @@ final class AppResolver {
 
     // Private libsystem call; without it helpers simply show under their own names.
     private static let responsiblePID: ResponsiblePID? = {
-        guard let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "responsibility_get_pid_responsible_for_pid") else { return nil }
+        guard let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "responsibility_get_pid_responsible_for_pid")
+        else { return nil }
         return unsafeBitCast(symbol, to: ResponsiblePID.self)
     }()
 
@@ -64,8 +65,9 @@ final class AppResolver {
         guard let responsiblePID else { return nil }
         let ownerPID = responsiblePID(pid)
         guard ownerPID > 0, ownerPID != pid,
-              let owner = NSRunningApplication(processIdentifier: ownerPID),
-              owner.activationPolicy == .regular else { return nil }
+            let owner = NSRunningApplication(processIdentifier: ownerPID),
+            owner.activationPolicy == .regular
+        else { return nil }
         return owner
     }
 

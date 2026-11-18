@@ -44,7 +44,9 @@ struct OutputDeviceRow: View {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(isSelected ? Color.white : Color.primary)
                     .frame(width: PanelMetrics.iconSize, height: PanelMetrics.iconSize)
-                    .background(Circle().fill(isSelected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.quaternary)))
+                    .background(
+                        Circle().fill(isSelected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.quaternary))
+                    )
                 Text(device.name)
                     .lineLimit(1)
                     .truncationMode(.tail)

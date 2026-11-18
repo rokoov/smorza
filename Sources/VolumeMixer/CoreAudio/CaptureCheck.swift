@@ -95,9 +95,14 @@ final class CaptureCheck {
             kAudioAggregateDeviceIsPrivateKey: true,
             kAudioAggregateDeviceIsStackedKey: false,
             kAudioAggregateDeviceSubDeviceListKey: [[kAudioSubDeviceUIDKey: deviceUID]],
-            kAudioAggregateDeviceTapListKey: [[kAudioSubTapUIDKey: description.uuid.uuidString, kAudioSubTapDriftCompensationKey: true]],
+            kAudioAggregateDeviceTapListKey: [
+                [kAudioSubTapUIDKey: description.uuid.uuidString, kAudioSubTapDriftCompensationKey: true]
+            ],
         ]
-        try check(AudioHardwareCreateAggregateDevice(composition as CFDictionary, &aggregateID), "Creating the check device")
+        try check(
+            AudioHardwareCreateAggregateDevice(composition as CFDictionary, &aggregateID),
+            "Creating the check device"
+        )
 
         let heard = heard
         let status = AudioDeviceCreateIOProcIDWithBlock(&listenProcID, aggregateID, nil) { _, input, _, output, _ in
@@ -130,7 +135,14 @@ final class CaptureCheck {
         var pid = getpid()
         var objectID = AudioObjectID.unknown
         var size = UInt32(MemoryLayout<AudioObjectID>.size)
-        let status = AudioObjectGetPropertyData(.system, &address, UInt32(MemoryLayout<pid_t>.size), &pid, &size, &objectID)
+        let status = AudioObjectGetPropertyData(
+            .system,
+            &address,
+            UInt32(MemoryLayout<pid_t>.size),
+            &pid,
+            &size,
+            &objectID
+        )
         try check(status, "Finding this app's audio process")
         guard objectID.isKnown else {
             throw CoreAudioError(operation: "Finding this app's audio process", status: kAudioHardwareBadObjectError)

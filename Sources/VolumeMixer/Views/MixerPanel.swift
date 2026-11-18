@@ -29,12 +29,15 @@ struct MixerPanel: View {
             }
             apps
             if model.captureState == .checking, !model.wasCaptureBlocked, model.entries.contains(where: \.isAdjusted) {
-                Label("Waiting for permission to hear other apps. If macOS asks, click Allow.", systemImage: "hourglass")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, PanelMetrics.padding)
-                    .padding(.bottom, 12)
+                Label(
+                    "Waiting for permission to hear other apps. If macOS asks, click Allow.",
+                    systemImage: "hourglass"
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, PanelMetrics.padding)
+                .padding(.bottom, 12)
             }
             if let routingError = model.routingError {
                 Label(routingError, systemImage: "exclamationmark.circle.fill")
@@ -208,7 +211,8 @@ struct OutputRow: View {
     var body: some View {
         MixerRow(
             title: output.name,
-            level: output.canSetVolume ? (output.isMuted ? "Muted" : "\(VolumeCurve.percent(output.volume))%") : "Fixed",
+            level: output.canSetVolume
+                ? (output.isMuted ? "Muted" : "\(VolumeCurve.percent(output.volume))%") : "Fixed",
             value: output.volume,
             isMuted: output.isMuted,
             isEnabled: output.canSetVolume,
@@ -263,13 +267,17 @@ struct CaptureNotice: View {
             Label("Volume Mixer can't hear other apps", systemImage: "exclamationmark.triangle.fill")
                 .font(.callout.weight(.semibold))
                 .foregroundStyle(.orange)
-            Text("Turn on Volume Mixer under Privacy & Security → Screen & System Audio Recording → System Audio Recording Only, then try again. Until then every app plays at full volume.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            Text(
+                "Turn on Volume Mixer under Privacy & Security → Screen & System Audio Recording → System Audio Recording Only, then try again. Until then every app plays at full volume."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 8) {
                 Button("Open System Settings") {
-                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
+                    if let url = URL(
+                        string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
+                    ) {
                         NSWorkspace.shared.open(url)
                     }
                 }

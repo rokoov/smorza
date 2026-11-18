@@ -85,12 +85,13 @@ public final class TapRenderer {
                     right = sourceChannels > 1 ? source[frame * sourceChannels + 1] : left
                 }
                 for channel in 0..<channels {
-                    destination[frame * channels + channel] = Self.sample(
-                        forChannel: firstChannel + channel,
-                        of: totalChannels,
-                        left: left,
-                        right: right
-                    ) * gain
+                    destination[frame * channels + channel] =
+                        Self.sample(
+                            forChannel: firstChannel + channel,
+                            of: totalChannels,
+                            left: left,
+                            right: right
+                        ) * gain
                 }
             }
         }

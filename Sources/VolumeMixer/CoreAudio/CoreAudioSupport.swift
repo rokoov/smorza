@@ -45,11 +45,17 @@ extension AudioObjectID {
         return value
     }
 
-    func readBool(_ selector: AudioObjectPropertySelector, scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal) -> Bool {
+    func readBool(
+        _ selector: AudioObjectPropertySelector,
+        scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal
+    ) -> Bool {
         ((try? read(selector, scope: scope, initial: UInt32(0))) ?? 0) != 0
     }
 
-    func readString(_ selector: AudioObjectPropertySelector, scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal) throws -> String {
+    func readString(
+        _ selector: AudioObjectPropertySelector,
+        scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal
+    ) throws -> String {
         var address = AudioObjectPropertyAddress(selector, scope: scope)
         var value: Unmanaged<CFString>?
         var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
@@ -57,12 +63,17 @@ extension AudioObjectID {
             AudioObjectGetPropertyData(self, &address, 0, nil, &size, pointer)
         }
         try check(status, describe("Reading", selector))
-        guard let value else { throw CoreAudioError(operation: describe("Reading", selector), status: kAudioHardwareUnspecifiedError) }
+        guard let value else {
+            throw CoreAudioError(operation: describe("Reading", selector), status: kAudioHardwareUnspecifiedError)
+        }
         // The HAL hands back a retained CFString.
         return value.takeRetainedValue() as String
     }
 
-    func readObjectIDs(_ selector: AudioObjectPropertySelector, scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal) throws -> [AudioObjectID] {
+    func readObjectIDs(
+        _ selector: AudioObjectPropertySelector,
+        scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal
+    ) throws -> [AudioObjectID] {
         var address = AudioObjectPropertyAddress(selector, scope: scope)
         var size: UInt32 = 0
         try check(AudioObjectGetPropertyDataSize(self, &address, 0, nil, &size), describe("Sizing", selector))
@@ -73,7 +84,11 @@ extension AudioObjectID {
         return Array(objectIDs.prefix(Int(size) / MemoryLayout<AudioObjectID>.size))
     }
 
-    func write<Value>(_ selector: AudioObjectPropertySelector, scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal, value: Value) throws {
+    func write<Value>(
+        _ selector: AudioObjectPropertySelector,
+        scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal,
+        value: Value
+    ) throws {
         var address = AudioObjectPropertyAddress(selector, scope: scope)
         let size = UInt32(MemoryLayout<Value>.size)
         let status = withUnsafePointer(to: value) { pointer in
@@ -82,7 +97,10 @@ extension AudioObjectID {
         try check(status, describe("Writing", selector))
     }
 
-    func isSettable(_ selector: AudioObjectPropertySelector, scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal) -> Bool {
+    func isSettable(
+        _ selector: AudioObjectPropertySelector,
+        scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal
+    ) -> Bool {
         var address = AudioObjectPropertyAddress(selector, scope: scope)
         guard AudioObjectHasProperty(self, &address) else { return false }
         var settable: DarwinBoolean = false
@@ -106,7 +124,10 @@ func ignoreInputStreams(_ count: Int, of aggregateID: AudioObjectID, procID: Aud
     let streamCount = count + 1
     let flagsOffset = MemoryLayout<AudioHardwareIOProcStreamUsage>.offset(of: \.mStreamIsOn) ?? 12
     let size = flagsOffset + streamCount * MemoryLayout<UInt32>.size
-    let storage = UnsafeMutableRawPointer.allocate(byteCount: size, alignment: MemoryLayout<AudioHardwareIOProcStreamUsage>.alignment)
+    let storage = UnsafeMutableRawPointer.allocate(
+        byteCount: size,
+        alignment: MemoryLayout<AudioHardwareIOProcStreamUsage>.alignment
+    )
     defer { storage.deallocate() }
 
     let usage = storage.bindMemory(to: AudioHardwareIOProcStreamUsage.self, capacity: 1)
@@ -117,10 +138,15 @@ func ignoreInputStreams(_ count: Int, of aggregateID: AudioObjectID, procID: Aud
         flags[index] = index < count ? 0 : 1
     }
 
-    var address = AudioObjectPropertyAddress(kAudioDevicePropertyIOProcStreamUsage, scope: kAudioObjectPropertyScopeInput)
+    var address = AudioObjectPropertyAddress(
+        kAudioDevicePropertyIOProcStreamUsage,
+        scope: kAudioObjectPropertyScopeInput
+    )
     let status = AudioObjectSetPropertyData(aggregateID, &address, 0, nil, UInt32(size), storage)
     if status != noErr {
-        log.error("Could not mark device inputs unused: \(fourCharacterCode(UInt32(bitPattern: status)), privacy: .public)")
+        log.error(
+            "Could not mark device inputs unused: \(fourCharacterCode(UInt32(bitPattern: status)), privacy: .public)"
+        )
     }
 }
 

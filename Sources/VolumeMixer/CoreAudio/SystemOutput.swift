@@ -52,7 +52,9 @@ final class SystemOutput {
             try AudioObjectID.system.write(kAudioHardwarePropertyDefaultOutputDevice, value: device.id)
             log.notice("Output switched to \(device.name, privacy: .public)")
         } catch {
-            log.error("Could not switch output to \(device.name, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            log.error(
+                "Could not switch output to \(device.name, privacy: .public): \(error.localizedDescription, privacy: .public)"
+            )
         }
     }
 
@@ -89,7 +91,9 @@ final class SystemOutput {
     }
 
     private func reloadDevice() {
-        let current = (try? AudioObjectID.system.read(kAudioHardwarePropertyDefaultOutputDevice, initial: AudioObjectID.unknown)) ?? .unknown
+        let current =
+            (try? AudioObjectID.system.read(kAudioHardwarePropertyDefaultOutputDevice, initial: AudioObjectID.unknown))
+            ?? .unknown
         let changed = current != deviceID
         deviceID = current
         name = (try? current.readString(kAudioObjectPropertyName)) ?? "No output device"
@@ -121,10 +125,11 @@ final class SystemOutput {
     /// default, and none of this app's own route devices.
     private static func outputDevice(_ deviceID: AudioObjectID) -> OutputDevice? {
         guard deviceID.streamCount(scope: outputScope) > 0,
-              deviceID.readBool(kAudioDevicePropertyDeviceCanBeDefaultDevice, scope: outputScope),
-              !deviceID.readBool(kAudioDevicePropertyIsHidden),
-              let uid = try? deviceID.readString(kAudioDevicePropertyDeviceUID),
-              !uid.hasPrefix(ProcessTap.aggregateUIDPrefix) else { return nil }
+            deviceID.readBool(kAudioDevicePropertyDeviceCanBeDefaultDevice, scope: outputScope),
+            !deviceID.readBool(kAudioDevicePropertyIsHidden),
+            let uid = try? deviceID.readString(kAudioDevicePropertyDeviceUID),
+            !uid.hasPrefix(ProcessTap.aggregateUIDPrefix)
+        else { return nil }
         let name = (try? deviceID.readString(kAudioObjectPropertyName)) ?? uid
         let transport = (try? deviceID.read(kAudioDevicePropertyTransportType, initial: UInt32(0))) ?? 0
         return OutputDevice(

@@ -34,7 +34,10 @@ final class ProcessTap {
         deviceInputStreams = outputDevice.streamCount(scope: kAudioObjectPropertyScopeInput)
         renderer = TapRenderer(tapBufferIndex: deviceInputStreams, gain: gain)
         do {
-            try check(AudioHardwareCreateProcessTap(makeDescription(processObjectIDs), &tapID), "Creating the process tap")
+            try check(
+                AudioHardwareCreateProcessTap(makeDescription(processObjectIDs), &tapID),
+                "Creating the process tap"
+            )
             try createAggregateDevice()
             try createIOProc()
         } catch {
@@ -121,9 +124,14 @@ final class ProcessTap {
             kAudioAggregateDeviceIsPrivateKey: true,
             kAudioAggregateDeviceIsStackedKey: false,
             kAudioAggregateDeviceSubDeviceListKey: [[kAudioSubDeviceUIDKey: deviceUID]],
-            kAudioAggregateDeviceTapListKey: [[kAudioSubTapUIDKey: tapUUID.uuidString, kAudioSubTapDriftCompensationKey: true]],
+            kAudioAggregateDeviceTapListKey: [
+                [kAudioSubTapUIDKey: tapUUID.uuidString, kAudioSubTapDriftCompensationKey: true]
+            ],
         ]
-        try check(AudioHardwareCreateAggregateDevice(composition as CFDictionary, &aggregateID), "Creating the aggregate device")
+        try check(
+            AudioHardwareCreateAggregateDevice(composition as CFDictionary, &aggregateID),
+            "Creating the aggregate device"
+        )
     }
 
     private func createIOProc() throws {

@@ -48,7 +48,8 @@ public final class AppVolumeStore {
         self.defaults = defaults
         self.storageKey = storageKey
         if let data = defaults.data(forKey: storageKey),
-           let decoded = try? JSONDecoder().decode([String: AppVolume].self, from: data) {
+            let decoded = try? JSONDecoder().decode([String: AppVolume].self, from: data)
+        {
             values = decoded
         } else {
             values = [:]

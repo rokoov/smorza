@@ -181,7 +181,8 @@ final class MixerModel {
             Self.cancel(&pendingRemovals, key)
             let processes = clients.map(\.objectID).sorted()
             guard (failedAttempts[key] ?? 0) < Tuning.routeAttempts,
-                  let route = route(for: key, processes: processes) else { continue }
+                let route = route(for: key, processes: processes)
+            else { continue }
             if clients.contains(where: \.isPlaying) {
                 Self.cancel(&pendingStops, key)
                 startRoute(route, key: key)
@@ -203,7 +204,9 @@ final class MixerModel {
             log.notice("Route for \(self.name(of: key), privacy: .public) now taps \(processes.count) processes")
             return existing
         } catch {
-            log.error("Could not update the route for \(self.name(of: key), privacy: .public): \(error.localizedDescription, privacy: .public)")
+            log.error(
+                "Could not update the route for \(self.name(of: key), privacy: .public): \(error.localizedDescription, privacy: .public)"
+            )
             routes[key] = nil
             let replacement = makeRoute(for: key, processes: processes)
             existing.invalidate()
@@ -214,9 +217,16 @@ final class MixerModel {
     private func makeRoute(for key: String, processes: [AudioObjectID]) -> ProcessTap? {
         guard output.deviceID.isKnown else { return nil }
         do {
-            let route = try ProcessTap(label: name(of: key), processObjectIDs: processes, outputDevice: output.deviceID, gain: store[key].gain)
+            let route = try ProcessTap(
+                label: name(of: key),
+                processObjectIDs: processes,
+                outputDevice: output.deviceID,
+                gain: store[key].gain
+            )
             routes[key] = route
-            log.notice("Routing \(self.name(of: key), privacy: .public) (\(processes.count) processes) to \(route.deviceUID, privacy: .public)")
+            log.notice(
+                "Routing \(self.name(of: key), privacy: .public) (\(processes.count) processes) to \(route.deviceUID, privacy: .public)"
+            )
             return route
         } catch {
             recordFailure(key, error)
@@ -243,7 +253,9 @@ final class MixerModel {
         let attempts = (failedAttempts[key] ?? 0) + 1
         failedAttempts[key] = attempts
         routingError = "\(name(of: key)): \(error.localizedDescription)"
-        log.error("Route for \(self.name(of: key), privacy: .public) failed (attempt \(attempts)): \(error.localizedDescription, privacy: .public)")
+        log.error(
+            "Route for \(self.name(of: key), privacy: .public) failed (attempt \(attempts)): \(error.localizedDescription, privacy: .public)"
+        )
         // A just-made aggregate device is sometimes not ready yet, so try again shortly.
         guard attempts < Tuning.routeAttempts, retryTask == nil else { return }
         retryTask = Task { [weak self] in
@@ -367,7 +379,9 @@ final class MixerModel {
         captureCheck = nil
         captureState = allowed ? .allowed : .blocked
         wasCaptureBlocked = !allowed
-        log.notice("Capture check \(allowed ? "passed" : "failed", privacy: .public) after \(elapsed.formatted(.units(allowed: [.seconds, .milliseconds])), privacy: .public)")
+        log.notice(
+            "Capture check \(allowed ? "passed" : "failed", privacy: .public) after \(elapsed.formatted(.units(allowed: [.seconds, .milliseconds])), privacy: .public)"
+        )
         syncRoutes()
     }
 
@@ -415,7 +429,10 @@ final class MixerModel {
         let isBusy = !routes.isEmpty || captureCheck != nil
         if isBusy, napBlocker == nil {
             // App Nap would delay the "started playing" notice and leave a routed app muted for longer.
-            napBlocker = ProcessInfo.processInfo.beginActivity(options: .userInitiatedAllowingIdleSystemSleep, reason: "Routing app audio")
+            napBlocker = ProcessInfo.processInfo.beginActivity(
+                options: .userInitiatedAllowingIdleSystemSleep,
+                reason: "Routing app audio"
+            )
         } else if !isBusy, let blocker = napBlocker {
             ProcessInfo.processInfo.endActivity(blocker)
             napBlocker = nil
@@ -443,7 +460,9 @@ final class MixerModel {
         for (key, route) in routes where route.isRunning {
             let peak = route.takePeak()
             if peak > 0, receivingAudio.insert(key).inserted {
-                log.notice("Receiving audio from \(self.name(of: key), privacy: .public), peak \(peak, format: .fixed(precision: 3))")
+                log.notice(
+                    "Receiving audio from \(self.name(of: key), privacy: .public), peak \(peak, format: .fixed(precision: 3))"
+                )
             }
         }
     }
@@ -489,7 +508,8 @@ final class MixerModel {
         let byActivity = fresh.sorted(by: Self.playingFirst)
         guard isPanelVisible else { return byActivity }
         let positions = Dictionary(uniqueKeysWithValues: entries.enumerated().map { ($1.id, $0) })
-        let kept = byActivity
+        let kept =
+            byActivity
             .filter { positions[$0.id] != nil }
             .sorted { positions[$0.id, default: 0] < positions[$1.id, default: 0] }
         return kept + byActivity.filter { positions[$0.id] == nil }

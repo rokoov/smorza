@@ -53,14 +53,38 @@ enum Diagnostics {
     private static func loadDemo(into model: MixerModel) {
         func icon(_ path: String) -> NSImage { NSWorkspace.shared.icon(forFile: path) }
         model.showDemo([
-            MixerEntry(id: "com.google.Chrome", name: "Google Chrome", icon: icon("/Applications/Google Chrome.app"),
-                       volume: 1, isMuted: false, isPlaying: true),
-            MixerEntry(id: "com.spotify.client", name: "Spotify", icon: icon("/Applications/Spotify.app"),
-                       volume: 0.6, isMuted: false, isPlaying: true),
-            MixerEntry(id: "com.hnc.Discord", name: "Discord", icon: icon("/Applications/Discord.app"),
-                       volume: 0.35, isMuted: false, isPlaying: false),
-            MixerEntry(id: "com.apple.Music", name: "Music", icon: icon("/System/Applications/Music.app"),
-                       volume: 0.8, isMuted: true, isPlaying: false),
+            MixerEntry(
+                id: "com.google.Chrome",
+                name: "Google Chrome",
+                icon: icon("/Applications/Google Chrome.app"),
+                volume: 1,
+                isMuted: false,
+                isPlaying: true
+            ),
+            MixerEntry(
+                id: "com.spotify.client",
+                name: "Spotify",
+                icon: icon("/Applications/Spotify.app"),
+                volume: 0.6,
+                isMuted: false,
+                isPlaying: true
+            ),
+            MixerEntry(
+                id: "com.hnc.Discord",
+                name: "Discord",
+                icon: icon("/Applications/Discord.app"),
+                volume: 0.35,
+                isMuted: false,
+                isPlaying: false
+            ),
+            MixerEntry(
+                id: "com.apple.Music",
+                name: "Music",
+                icon: icon("/System/Applications/Music.app"),
+                volume: 0.8,
+                isMuted: true,
+                isPlaying: false
+            ),
         ])
         model.output.showDemo(
             name: "MacBook Pro Speakers",
@@ -75,14 +99,21 @@ enum Diagnostics {
     }
 
     static func printAudioClients() {
-        let device = (try? AudioObjectID.system.read(kAudioHardwarePropertyDefaultOutputDevice, initial: AudioObjectID.unknown)) ?? .unknown
+        let device =
+            (try? AudioObjectID.system.read(kAudioHardwarePropertyDefaultOutputDevice, initial: AudioObjectID.unknown))
+            ?? .unknown
         let name = (try? device.readString(kAudioObjectPropertyName)) ?? "?"
         let uid = (try? device.readString(kAudioDevicePropertyDeviceUID)) ?? "?"
         let volumeSelector = kAudioHardwareServiceDeviceProperty_VirtualMainVolume
-        let volume = (try? device.read(volumeSelector, scope: kAudioObjectPropertyScopeOutput, initial: Float32(-1))) ?? -1
+        let volume =
+            (try? device.read(volumeSelector, scope: kAudioObjectPropertyScopeOutput, initial: Float32(-1))) ?? -1
         print("Output device \(device): \(name) [\(uid)]")
-        print("  streams in \(device.streamCount(scope: kAudioObjectPropertyScopeInput)), out \(device.streamCount(scope: kAudioObjectPropertyScopeOutput))")
-        print("  volume \(volume), settable \(device.isSettable(volumeSelector, scope: kAudioObjectPropertyScopeOutput)), mute settable \(device.isSettable(kAudioDevicePropertyMute, scope: kAudioObjectPropertyScopeOutput))")
+        print(
+            "  streams in \(device.streamCount(scope: kAudioObjectPropertyScopeInput)), out \(device.streamCount(scope: kAudioObjectPropertyScopeOutput))"
+        )
+        print(
+            "  volume \(volume), settable \(device.isSettable(volumeSelector, scope: kAudioObjectPropertyScopeOutput)), mute settable \(device.isSettable(kAudioDevicePropertyMute, scope: kAudioObjectPropertyScopeOutput))"
+        )
 
         let output = SystemOutput()
         output.start()
@@ -97,7 +128,9 @@ enum Diagnostics {
         for client in clients {
             let identity = resolver.identity(for: client)
             let state = client.isPlaying ? "PLAYING" : "idle   "
-            print("  \(state) pid \(client.pid) object \(client.objectID) bundle \(client.bundleID ?? "-") -> \(identity.name) [\(identity.key)]")
+            print(
+                "  \(state) pid \(client.pid) object \(client.objectID) bundle \(client.bundleID ?? "-") -> \(identity.name) [\(identity.key)]"
+            )
         }
     }
 }

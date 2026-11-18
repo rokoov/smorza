@@ -3,6 +3,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+echo "== format"
+swift format lint --strict --parallel --recursive Package.swift Sources Checks scripts \
+    || { echo "Formatting is off: run scripts/format.sh"; exit 1; }
+
 echo "== build"
 output="$(swift build -c release 2>&1)" || { echo "$output"; exit 1; }
 if grep -q "warning:" <<<"$output"; then
