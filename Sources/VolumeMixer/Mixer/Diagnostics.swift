@@ -47,7 +47,6 @@ enum Diagnostics {
         print("Output device \(device): \(name) [\(uid)]")
         print("  streams in \(device.streamCount(scope: kAudioObjectPropertyScopeInput)), out \(device.streamCount(scope: kAudioObjectPropertyScopeOutput))")
         print("  volume \(volume), settable \(device.isSettable(volumeSelector, scope: kAudioObjectPropertyScopeOutput)), mute settable \(device.isSettable(kAudioDevicePropertyMute, scope: kAudioObjectPropertyScopeOutput))")
-        print("Audio capture permission: \(AudioCapturePermission.current().rawValue) (check available: \(AudioCapturePermission.canCheck))")
 
         let output = SystemOutput()
         output.start()
