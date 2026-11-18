@@ -5,6 +5,7 @@ import SwiftUI
 struct MixerPanel: View {
     let model: MixerModel
     @State private var loginItem = LoginItem()
+    @State private var isSavingProfile = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -38,6 +39,16 @@ struct MixerPanel: View {
             if model.output.devices.count > 1 {
                 Divider()
                 OutputPicker(output: model.output)
+            }
+            if isSavingProfile {
+                Divider()
+                ProfileEditor(
+                    onSave: { name, mutesOtherApps in
+                        model.saveProfile(named: name, mutesOtherApps: mutesOtherApps)
+                        isSavingProfile = false
+                    },
+                    onCancel: { isSavingProfile = false }
+                )
             }
             Divider()
             footer
@@ -112,6 +123,12 @@ struct MixerPanel: View {
                 Toggle("Open at login", isOn: Binding(get: { loginItem.isEnabled }, set: { loginItem.setEnabled($0) }))
                     .toggleStyle(.checkbox)
                 Spacer()
+                ProfilesMenu(
+                    profiles: model.profiles,
+                    onApply: model.applyProfile,
+                    onSave: { isSavingProfile = true },
+                    onDelete: model.deleteProfile
+                )
                 Button("Quit") { NSApp.terminate(nil) }
                     .keyboardShortcut("q")
             }

@@ -18,6 +18,7 @@ final class MixerModel {
     }
 
     private(set) var entries: [MixerEntry] = []
+    private(set) var profiles: [Profile] = []
     /// The app playing solo, with every other app in the mixer muted.
     private(set) var solo: SoloSession?
     let output = SystemOutput()
@@ -29,6 +30,7 @@ final class MixerModel {
     @ObservationIgnored private let monitor = AudioProcessMonitor()
     @ObservationIgnored private let resolver = AppResolver()
     @ObservationIgnored private let store = MixerSettingsStore()
+    @ObservationIgnored private let hotKeys = HotKeyCenter()
     @ObservationIgnored private var identities: [AudioObjectID: AppIdentity] = [:]
     @ObservationIgnored private var listedKeys: Set<String> = []
     @ObservationIgnored private var rowSummary: [String] = []
@@ -52,6 +54,7 @@ final class MixerModel {
         output.start()
         monitor.start()
         listenForServiceRestart()
+        profilesChanged()
         wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification,
             object: nil,
@@ -119,6 +122,40 @@ final class MixerModel {
         setMutes(session.mutes)
     }
 
+    /// Saves the mix as it is now: every app in the mixer with its volume and mute. A profile with the
+    /// same name is replaced, so saving "Gaming" again updates it.
+    func saveProfile(named name: String, mutesOtherApps: Bool) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let existing = profiles.first { $0.name.localizedCaseInsensitiveCompare(trimmed) == .orderedSame }
+        let profile = Profile(
+            id: existing?.id ?? UUID(),
+            name: trimmed,
+            apps: currentMix(),
+            mutesOtherApps: mutesOtherApps
+        )
+        store.saveProfile(profile)
+        log.notice("Saved profile \(trimmed, privacy: .public)")
+        profilesChanged()
+    }
+
+    func applyProfile(_ profile: Profile) {
+        endSolo(restoring: false)
+        for (key, setting) in profile.changes(from: currentMix()) {
+            store.setVolume(setting, for: key, on: outputDeviceUID(for: key))
+            routes.clearFailures(for: key)
+        }
+        capture.retry()
+        let name = profile.name
+        log.notice("Switched to profile \(name, privacy: .public)")
+        syncRoutes()
+    }
+
+    func deleteProfile(_ profile: Profile) {
+        store.deleteProfile(id: profile.id)
+        profilesChanged()
+    }
+
     /// Sends the app to `device`, or back to the system output with nil.
     func setOutputDevice(_ device: OutputDevice?, for key: String) {
         store.setOutputDevice(uid: device?.uid, name: device?.name, for: key)
@@ -141,6 +178,30 @@ final class MixerModel {
         routes.clearFailures(for: key)
         capture.retry()
         syncRoutes()
+    }
+
+    /// Every app in the mixer with the volume and mute it has now.
+    private func currentMix() -> [String: AppVolume] {
+        Dictionary(
+            entries.map { ($0.id, AppVolume(volume: $0.volume, isMuted: $0.isMuted)) },
+            uniquingKeysWith: { first, _ in first }
+        )
+    }
+
+    /// The first nine profiles answer to Control-Option-1 to 9.
+    private func profilesChanged() {
+        profiles = store.profiles
+        hotKeys.unregisterAll()
+        var shortcuts = 0
+        for (index, profile) in profiles.prefix(9).enumerated() {
+            let isRegistered = hotKeys.registerControlOption(number: index + 1) { [weak self] in
+                self?.applyProfile(profile)
+            }
+            shortcuts += isRegistered ? 1 : 0
+        }
+        if !profiles.isEmpty {
+            log.notice("Profiles: \(self.profiles.count), with shortcuts: \(shortcuts)")
+        }
     }
 
     private func endSolo(restoring: Bool) {
