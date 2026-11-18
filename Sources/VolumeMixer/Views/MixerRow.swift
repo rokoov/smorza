@@ -5,7 +5,13 @@ import SwiftUI
 struct MixerRow<Icon: View>: View {
     let title: String
     let level: String
-    let value: Double
+    /// Slider position, 0...1.
+    let position: Double
+    /// The volume the position stands for, which picks the speaker symbol.
+    let volume: Double
+    /// Where 100% sits on a slider that goes past it; nil draws no mark.
+    var unityMark: Double?
+    var isBoosted = false
     let isMuted: Bool
     let isEnabled: Bool
     let onChange: (Double) -> Void
@@ -25,14 +31,21 @@ struct MixerRow<Icon: View>: View {
                     Text(level)
                         .font(.caption)
                         .monospacedDigit()
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(isBoosted ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
                 }
-                Slider(value: Binding(get: { value }, set: onChange), in: 0...1)
+                Slider(value: Binding(get: { position }, set: onChange), in: 0...1)
                     .controlSize(.small)
+                    .background {
+                        if let unityMark {
+                            UnityMark(position: unityMark)
+                        }
+                    }
                     .disabled(!isEnabled)
                     .opacity(isMuted ? 0.45 : 1)
+                    .accessibilityValue(level)
+                    .help(unityMark == nil ? "" : "Past the mark boosts above 100%")
             }
-            MuteButton(isMuted: isMuted, volume: value, action: onToggleMute)
+            MuteButton(isMuted: isMuted, volume: volume, action: onToggleMute)
         }
         .frame(minHeight: PanelMetrics.rowHeight)
         .accessibilityElement(children: .contain)

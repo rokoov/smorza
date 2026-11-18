@@ -11,4 +11,5 @@ struct MixerEntry: Identifiable, Equatable, MixerRowItem {
     var isPlaying: Bool
 
     var isAdjusted: Bool { AppVolume(volume: volume, isMuted: isMuted).needsRouting }
+    var isBoosted: Bool { AppVolume(volume: volume, isMuted: isMuted).isBoosted }
 }

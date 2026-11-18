@@ -87,7 +87,7 @@ final class MixerModel {
 
     func setVolume(_ volume: Double, for key: String) {
         var setting = store[key]
-        setting.volume = min(max(volume, 0), 1)
+        setting.volume = min(max(volume, 0), VolumeCurve.maximum)
         apply(setting, to: key)
     }
 

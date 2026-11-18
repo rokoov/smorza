@@ -183,18 +183,63 @@ do {
     output.release()
 }
 
+// Limiter: boost never pushes a sample past the ceiling, and quiet audio passes untouched.
+do {
+    let frames = 4_800
+    let loud = TestBuffers(channelsPerBuffer: [2], frames: frames) { _, frame, _ in frame % 2 == 0 ? 0.8 : -0.8 }
+    let output = TestBuffers(channelsPerBuffer: [2], frames: frames)
+    let renderer = TapRenderer(tapBufferIndex: 0, gain: 2)
+    run(renderer, input: loud, output: output)
+    var loudest: Float = 0
+    for frame in 0..<frames {
+        loudest = max(loudest, abs(output.sample(buffer: 0, frame: frame, channel: 0)))
+    }
+    expect(loudest <= TapRenderer.ceiling + 1e-6, "a 0.8 signal boosted twice stays under the ceiling: \(loudest)")
+    expect(
+        loudest > TapRenderer.ceiling - 0.01,
+        "the limiter holds the signal at the ceiling, not below it: \(loudest)"
+    )
+
+    let quiet = TestBuffers(channelsPerBuffer: [2], frames: frames) { _, _, _ in 0.3 }
+    let recovering = TapRenderer(tapBufferIndex: 0, gain: 2)
+    run(recovering, input: loud, output: output)
+    for _ in 0..<10 {
+        run(recovering, input: quiet, output: output)
+    }
+    let settled = output.sample(buffer: 0, frame: frames - 1, channel: 1)
+    expect(nearlyEqual(settled, 0.6), "after the peak the limiter lets go and 0.3 boosted twice is 0.6: \(settled)")
+
+    let untouched = TapRenderer(tapBufferIndex: 0, gain: 1)
+    run(untouched, input: quiet, output: output)
+    expect(output.sample(buffer: 0, frame: 7, channel: 0) == 0.3, "quiet audio at 100% passes bit for bit")
+    for buffers in [loud, output, quiet] {
+        buffers.release()
+    }
+}
+
 // Volume curve.
-expect(VolumeCurve.gain(sliderValue: 1, isMuted: false) == 1, "full slider is unity gain")
-expect(VolumeCurve.gain(sliderValue: 0.999, isMuted: false) == 1, "the top of the slider snaps to unity gain")
-expect(
-    nearlyEqual(VolumeCurve.gain(sliderValue: 0.5, isMuted: false), 0.25),
-    "half slider is a quarter of the amplitude"
-)
-expect(VolumeCurve.gain(sliderValue: 0.8, isMuted: true) == 0, "muted is silent")
-expect(VolumeCurve.gain(sliderValue: -1, isMuted: false) == 0, "slider clamps below zero")
+expect(VolumeCurve.gain(volume: 1, isMuted: false) == 1, "100% is unity gain")
+expect(VolumeCurve.gain(volume: 0.999, isMuted: false) == 1, "a hair under 100% is still unity gain")
+expect(nearlyEqual(VolumeCurve.gain(volume: 0.5, isMuted: false), 0.25), "50% is a quarter of the amplitude")
+expect(nearlyEqual(VolumeCurve.gain(volume: 1.5, isMuted: false), 1.5), "boost is linear: 150% is 1.5 times the signal")
+expect(VolumeCurve.gain(volume: 3, isMuted: false) == 2, "boost stops at 200%")
+expect(VolumeCurve.gain(volume: 0.8, isMuted: true) == 0, "muted is silent")
+expect(VolumeCurve.gain(volume: -1, isMuted: false) == 0, "volume clamps below zero")
 expect(VolumeCurve.percent(0.996) == 100, "percent rounds to the label the user sees")
-expect(!AppVolume().needsRouting, "a default app plays untouched")
-expect(AppVolume(volume: 1, isMuted: true).needsRouting, "a muted app is routed")
+expect(VolumeCurve.percent(1.5) == 150, "boost reads above 100%")
+
+// Slider positions: 100% sits three quarters along, boost takes the last quarter.
+expect(VolumeCurve.position(of: 1) == VolumeCurve.unityPosition, "100% sits on the mark")
+expect(VolumeCurve.position(of: 2) == 1, "200% is the end of the slider")
+expect(nearlyEqual(Float(VolumeCurve.position(of: 0.5)), 0.375), "50% is half way to the mark")
+expect(VolumeCurve.volume(atPosition: VolumeCurve.unityPosition + 0.01) == 1, "a drag next to the mark snaps onto 100%")
+expect(nearlyEqual(Float(VolumeCurve.volume(atPosition: 0.875)), 1.5), "half way through the boost quarter is 150%")
+for volume in [0.0, 0.2, 0.6, 1.3, 1.8, 2.0] {
+    let roundTrip = VolumeCurve.volume(atPosition: VolumeCurve.position(of: volume))
+    expect(nearlyEqual(Float(roundTrip), Float(volume)), "position and volume convert both ways for \(volume)")
+}
+expect(AppVolume(volume: 1.4).isBoosted, "above 100% is boost")
+expect(AppVolume(volume: 1.4).needsRouting, "a boosted app is routed")
 expect(AppVolume(volume: 0.4).needsRouting, "a quieter app is routed")
 
 // Settings survive a relaunch and drop apps back at full volume.

@@ -1,4 +1,4 @@
-/// One app's mixer setting. The slider runs 0...1; 1 means the app plays untouched.
+/// One app's mixer setting. Volume runs 0...2; 1 means the app plays untouched, above 1 is boost.
 public struct AppVolume: Codable, Equatable {
     public var volume: Double
     public var isMuted: Bool
@@ -8,12 +8,16 @@ public struct AppVolume: Codable, Equatable {
         self.isMuted = isMuted
     }
 
-    /// Whether the app's audio has to go through a tap. At full volume and unmuted it plays directly.
+    /// Whether the app's audio has to go through a tap. At 100% and unmuted it plays directly.
     public var needsRouting: Bool {
-        isMuted || volume < VolumeCurve.fullVolumeThreshold
+        isMuted || !VolumeCurve.isUnity(volume)
+    }
+
+    public var isBoosted: Bool {
+        volume > 1 && !VolumeCurve.isUnity(volume)
     }
 
     public var gain: Float {
-        VolumeCurve.gain(sliderValue: volume, isMuted: isMuted)
+        VolumeCurve.gain(volume: volume, isMuted: isMuted)
     }
 }

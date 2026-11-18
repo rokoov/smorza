@@ -30,7 +30,10 @@ final class ProcessTap {
         deviceUID = try outputDevice.readString(kAudioDevicePropertyDeviceUID)
         // An output device with its own inputs (a headset) puts them ahead of the tap's stream.
         deviceInputStreams = outputDevice.streamCount(scope: kAudioObjectPropertyScopeInput)
-        renderer = TapRenderer(tapBufferIndex: deviceInputStreams, gain: gain)
+        // The limiter's release is timed in samples at the rate the route will run at.
+        let sampleRate =
+            (try? outputDevice.read(kAudioDevicePropertyNominalSampleRate, initial: Float64(48_000))) ?? 48_000
+        renderer = TapRenderer(tapBufferIndex: deviceInputStreams, gain: gain, sampleRate: sampleRate)
         do {
             try check(AudioHardwareCreateProcessTap(makeDescription(processObjectIDs), &tapID), "Creating the tap")
             aggregateID = try PrivateAggregateDevice.make(
