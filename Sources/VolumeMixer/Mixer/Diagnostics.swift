@@ -49,6 +49,13 @@ enum Diagnostics {
         print("  volume \(volume), settable \(device.isSettable(volumeSelector, scope: kAudioObjectPropertyScopeOutput)), mute settable \(device.isSettable(kAudioDevicePropertyMute, scope: kAudioObjectPropertyScopeOutput))")
         print("Audio capture permission: \(AudioCapturePermission.current().rawValue) (check available: \(AudioCapturePermission.canCheck))")
 
+        let output = SystemOutput()
+        output.start()
+        print("Output devices: \(output.devices.count)")
+        for item in output.devices {
+            print("  \(item.id == output.deviceID ? "*" : " ") \(item.id) \(item.name) [\(item.symbolName)]")
+        }
+
         let resolver = AppResolver()
         let clients = AudioProcessMonitor.snapshot().values.sorted { $0.pid < $1.pid }
         print("Audio clients: \(clients.count)")

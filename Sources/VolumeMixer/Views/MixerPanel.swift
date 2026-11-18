@@ -44,6 +44,10 @@ struct MixerPanel: View {
                     .padding(.horizontal, PanelMetrics.padding)
                     .padding(.bottom, 12)
             }
+            if model.output.devices.count > 1 {
+                Divider()
+                OutputPicker(output: model.output)
+            }
             Divider()
             footer
         }
@@ -216,7 +220,7 @@ struct OutputRow: View {
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.secondary)
                 .frame(width: PanelMetrics.iconSize, height: PanelMetrics.iconSize)
-                .background(.quaternary, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .background(.quaternary, in: Circle())
         }
         .accessibilityLabel("Output volume, \(output.name)")
     }
