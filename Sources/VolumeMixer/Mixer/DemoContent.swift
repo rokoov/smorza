@@ -9,19 +9,27 @@ enum DemoContent {
         var volume = 1.0
         var isMuted = false
         var isPlaying = false
+        /// UID of a device from `devices` the app is sent to, or nil for the system output.
+        var outputDeviceUID: String?
     }
 
     static let apps = [
         App(name: "Google Chrome", path: "/Applications/Google Chrome.app", isPlaying: true),
         App(name: "Spotify", path: "/Applications/Spotify.app", volume: 0.6, isPlaying: true),
-        App(name: "Discord", path: "/Applications/Discord.app", volume: 1.4),
+        App(name: "Discord", path: "/Applications/Discord.app", volume: 1.4, outputDeviceUID: "demo.airpods"),
         App(name: "Music", path: "/System/Applications/Music.app", volume: 0.8, isMuted: true),
     ]
 
     static let devices = [
-        OutputDevice(id: 9001, name: "MacBook Pro Speakers", symbolName: "laptopcomputer", isBuiltIn: true),
-        OutputDevice(id: 9002, name: "AirPods Pro", symbolName: "airpodspro", isBuiltIn: false),
-        OutputDevice(id: 9003, name: "Studio Display", symbolName: "display", isBuiltIn: false),
+        OutputDevice(
+            id: 9001,
+            uid: "demo.speakers",
+            name: "MacBook Pro Speakers",
+            symbolName: "laptopcomputer",
+            isBuiltIn: true
+        ),
+        OutputDevice(id: 9002, uid: "demo.airpods", name: "AirPods Pro", symbolName: "airpodspro", isBuiltIn: false),
+        OutputDevice(id: 9003, uid: "demo.display", name: "Studio Display", symbolName: "display", isBuiltIn: false),
     ]
 
     static let outputVolume = 0.5
@@ -29,13 +37,17 @@ enum DemoContent {
     @MainActor
     static var entries: [MixerEntry] {
         apps.map { app in
-            MixerEntry(
+            let device = devices.first { $0.uid == app.outputDeviceUID } ?? devices[0]
+            return MixerEntry(
                 id: app.name,
                 name: app.name,
                 icon: NSWorkspace.shared.icon(forFile: app.path),
                 volume: app.volume,
                 isMuted: app.isMuted,
-                isPlaying: app.isPlaying
+                isPlaying: app.isPlaying,
+                outputDeviceUID: app.outputDeviceUID,
+                outputDeviceName: app.outputDeviceUID == nil ? nil : device.name,
+                outputSymbol: device.symbolName
             )
         }
     }

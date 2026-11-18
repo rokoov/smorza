@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Icon, name and level on top, the slider below, mute on the right. The output device uses the
 /// same layout so every slider, level and mute button lines up in one column.
-struct MixerRow<Icon: View>: View {
+struct MixerRow<Icon: View, Accessory: View>: View {
     let title: String
     let level: String
     /// Slider position, 0...1.
@@ -16,6 +16,8 @@ struct MixerRow<Icon: View>: View {
     let isEnabled: Bool
     let onChange: (Double) -> Void
     let onToggleMute: () -> Void
+    /// Sits before the mute button: an app's output menu, nothing for the device row.
+    let accessory: Accessory
     @ViewBuilder let icon: () -> Icon
 
     var body: some View {
@@ -45,6 +47,7 @@ struct MixerRow<Icon: View>: View {
                     .accessibilityValue(level)
                     .help(unityMark == nil ? "" : "Past the mark boosts above 100%")
             }
+            accessory
             MuteButton(isMuted: isMuted, volume: volume, action: onToggleMute)
         }
         .frame(minHeight: PanelMetrics.rowHeight)

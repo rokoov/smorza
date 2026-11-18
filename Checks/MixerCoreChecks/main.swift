@@ -242,23 +242,42 @@ expect(AppVolume(volume: 1.4).isBoosted, "above 100% is boost")
 expect(AppVolume(volume: 1.4).needsRouting, "a boosted app is routed")
 expect(AppVolume(volume: 0.4).needsRouting, "a quieter app is routed")
 
-// Settings survive a relaunch and drop apps back at full volume.
+// Settings: version 1 migrates, volumes are kept per device, devices are remembered, apps back at
+// default are forgotten, and a newer format on disk is never overwritten.
 do {
     let suiteName = "MixerCoreChecks.\(UUID().uuidString)"
     guard let defaults = UserDefaults(suiteName: suiteName) else { fatalError("no defaults suite") }
-    let store = AppVolumeStore(defaults: defaults)
-    store["com.spotify.client"] = AppVolume(volume: 0.3)
-    store["com.google.Chrome"] = AppVolume(volume: 1, isMuted: true)
-    let reloaded = AppVolumeStore(defaults: defaults)
-    expect(reloaded["com.spotify.client"] == AppVolume(volume: 0.3), "a volume is restored after relaunch")
-    expect(reloaded["com.google.Chrome"].isMuted, "mute is restored after relaunch")
-    reloaded["com.spotify.client"] = AppVolume()
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    let legacy = try JSONEncoder().encode(["com.spotify.client": AppVolume(volume: 0.3)])
+    defaults.set(legacy, forKey: "AppVolumes")
+
+    let store = MixerSettingsStore(defaults: defaults)
     expect(
-        !AppVolumeStore(defaults: defaults).adjustedKeys.contains("com.spotify.client"),
-        "an app back at full volume is forgotten"
+        store.volume(for: "com.spotify.client", on: "speakers") == AppVolume(volume: 0.3),
+        "a version 1 volume carries over to any device"
     )
-    expect(reloaded["unknown.app"] == AppVolume(), "an unknown app starts at full volume")
-    defaults.removePersistentDomain(forName: suiteName)
+    store.adoptVolume(for: "com.spotify.client", on: "speakers")
+    store.setVolume(AppVolume(volume: 1), for: "com.spotify.client", on: "headphones")
+    expect(store.volume(for: "com.spotify.client", on: "speakers").volume == 0.3, "speakers keep their own volume")
+    expect(store.volume(for: "com.spotify.client", on: "headphones").volume == 1, "headphones get theirs")
+    expect(store.volume(for: "com.spotify.client", on: "tv").volume == 1, "a new device starts at the last volume")
+
+    store.setOutputDevice(uid: "airpods", name: "AirPods Pro", for: "com.hnc.Discord")
+    let reloaded = MixerSettingsStore(defaults: defaults)
+    expect(
+        reloaded.settings(for: "com.hnc.Discord").outputDeviceUID == "airpods",
+        "a chosen device survives a relaunch"
+    )
+    expect(reloaded.volume(for: "com.spotify.client", on: "speakers").volume == 0.3, "per-device volumes survive too")
+
+    reloaded.setOutputDevice(uid: nil, name: nil, for: "com.hnc.Discord")
+    expect(!reloaded.appKeys.contains("com.hnc.Discord"), "an app back at default is forgotten")
+    expect(reloaded.settings(for: "unknown.app") == AppSettings(), "an unknown app starts at default")
+
+    let newer = Data(#"{"version":99,"apps":{}}"#.utf8)
+    defaults.set(newer, forKey: "Settings")
+    MixerSettingsStore(defaults: defaults).setVolume(AppVolume(volume: 0.5), for: "x", on: "y")
+    expect(defaults.data(forKey: "Settings") == newer, "a newer settings format is left untouched")
 }
 
 // Row order: playing apps first, then by name; open panels keep rows in place.

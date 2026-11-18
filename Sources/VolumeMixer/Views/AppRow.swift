@@ -4,8 +4,11 @@ import SwiftUI
 /// An app's row. A dimmed, grey icon means the app is quiet right now; an orange level means boost.
 struct AppRow: View {
     let entry: MixerEntry
+    let devices: [OutputDevice]
+    let systemOutputName: String
     let onVolume: (Double) -> Void
     let onToggleMute: () -> Void
+    let onChooseOutput: (OutputDevice?) -> Void
 
     var body: some View {
         MixerRow(
@@ -18,7 +21,13 @@ struct AppRow: View {
             isMuted: entry.isMuted,
             isEnabled: true,
             onChange: setPosition,
-            onToggleMute: onToggleMute
+            onToggleMute: onToggleMute,
+            accessory: AppOutputMenu(
+                entry: entry,
+                devices: devices,
+                systemOutputName: systemOutputName,
+                onChoose: onChooseOutput
+            )
         ) {
             Image(nsImage: entry.icon)
                 .resizable()

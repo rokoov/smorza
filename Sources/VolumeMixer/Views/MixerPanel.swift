@@ -84,8 +84,11 @@ struct MixerPanel: View {
             ForEach(model.entries) { entry in
                 AppRow(
                     entry: entry,
+                    devices: model.output.devices,
+                    systemOutputName: model.output.name,
                     onVolume: { model.setVolume($0, for: entry.id) },
-                    onToggleMute: { model.toggleMute(for: entry.id) }
+                    onToggleMute: { model.toggleMute(for: entry.id) },
+                    onChooseOutput: { model.setOutputDevice($0, for: entry.id) }
                 )
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }

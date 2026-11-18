@@ -10,6 +10,7 @@ import Observation
 @Observable
 final class SystemOutput {
     private(set) var deviceID = AudioObjectID.unknown
+    private(set) var deviceUID = ""
     private(set) var name = ""
     private(set) var volume: Double = 0
     private(set) var isMuted = false
@@ -50,6 +51,10 @@ final class SystemOutput {
         }
     }
 
+    func device(withUID uid: String) -> OutputDevice? {
+        devices.first { $0.uid == uid }
+    }
+
     func setVolume(_ value: Double) {
         guard canSetVolume else { return }
         let clamped = Float32(min(max(value, 0), 1))
@@ -68,6 +73,7 @@ final class SystemOutput {
     func showDemo(name: String, symbolName: String, volume: Double, devices: [OutputDevice]) {
         isDemo = true
         deviceID = devices.first?.id ?? .unknown
+        deviceUID = devices.first?.uid ?? ""
         self.name = name
         self.symbolName = symbolName
         self.volume = volume
@@ -88,6 +94,7 @@ final class SystemOutput {
             ?? .unknown
         let changed = current != deviceID
         deviceID = current
+        deviceUID = (try? current.readString(kAudioDevicePropertyDeviceUID)) ?? ""
         name = (try? current.readString(kAudioObjectPropertyName)) ?? "No output device"
         canSetVolume = current.isSettable(Self.volumeSelector, scope: Self.outputScope)
         canMute = current.isSettable(kAudioDevicePropertyMute, scope: Self.outputScope)
@@ -126,6 +133,7 @@ final class SystemOutput {
         let transport = (try? deviceID.read(kAudioDevicePropertyTransportType, initial: UInt32(0))) ?? 0
         return OutputDevice(
             id: deviceID,
+            uid: uid,
             name: name,
             symbolName: symbolName(for: deviceID, name: name),
             isBuiltIn: transport == kAudioDeviceTransportTypeBuiltIn
