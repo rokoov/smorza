@@ -98,6 +98,48 @@ extension AudioObjectID {
     }
 }
 
+/// Marks the first `count` input streams of an aggregate device unused for one IO callback. They are
+/// the output device's own inputs (a headset microphone), which come before the tap's stream, so
+/// starting the callback never opens the microphone or drops Bluetooth headphones to call quality.
+func ignoreInputStreams(_ count: Int, of aggregateID: AudioObjectID, procID: AudioDeviceIOProcID) {
+    guard count > 0 else { return }
+    let streamCount = count + 1
+    let flagsOffset = MemoryLayout<AudioHardwareIOProcStreamUsage>.offset(of: \.mStreamIsOn) ?? 12
+    let size = flagsOffset + streamCount * MemoryLayout<UInt32>.size
+    let storage = UnsafeMutableRawPointer.allocate(byteCount: size, alignment: MemoryLayout<AudioHardwareIOProcStreamUsage>.alignment)
+    defer { storage.deallocate() }
+
+    let usage = storage.bindMemory(to: AudioHardwareIOProcStreamUsage.self, capacity: 1)
+    usage.pointee.mIOProc = unsafeBitCast(procID, to: UnsafeMutableRawPointer.self)
+    usage.pointee.mNumberStreams = UInt32(streamCount)
+    let flags = (storage + flagsOffset).bindMemory(to: UInt32.self, capacity: streamCount)
+    for index in 0..<streamCount {
+        flags[index] = index < count ? 0 : 1
+    }
+
+    var address = AudioObjectPropertyAddress(kAudioDevicePropertyIOProcStreamUsage, scope: kAudioObjectPropertyScopeInput)
+    let status = AudioObjectSetPropertyData(aggregateID, &address, 0, nil, UInt32(size), storage)
+    if status != noErr {
+        log.error("Could not mark device inputs unused: \(fourCharacterCode(UInt32(bitPattern: status)), privacy: .public)")
+    }
+}
+
+/// One flag the IO thread raises and the main thread reads. A single aligned word cannot tear.
+final class SignalFlag {
+    private let storage: UnsafeMutablePointer<UInt32>
+
+    init() {
+        storage = .allocate(capacity: 1)
+        storage.initialize(to: 0)
+    }
+
+    deinit { storage.deallocate() }
+
+    var isRaised: Bool { storage.pointee != 0 }
+
+    func raise() { storage.pointee = 1 }
+}
+
 /// One Core Audio property listener, removed when invalidated or released.
 final class PropertyListener {
     private let objectID: AudioObjectID

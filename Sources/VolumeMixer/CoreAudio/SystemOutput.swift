@@ -1,9 +1,19 @@
+import AppKit
 import AudioToolbox
 import CoreAudio
 import Foundation
 import Observation
 
-/// The default output device: its name, its own volume and mute, and when it changes.
+/// A device sound can be sent to, as the output list shows it.
+struct OutputDevice: Identifiable, Equatable {
+    let id: AudioObjectID
+    let name: String
+    let symbolName: String
+    let isBuiltIn: Bool
+}
+
+/// The default output device: its name, its own volume and mute, the devices it can switch to,
+/// and when it changes.
 @MainActor
 @Observable
 final class SystemOutput {
@@ -14,9 +24,12 @@ final class SystemOutput {
     private(set) var canSetVolume = false
     private(set) var canMute = false
     private(set) var symbolName = "hifispeaker.fill"
+    private(set) var devices: [OutputDevice] = []
 
     @ObservationIgnored var onDeviceChange: (() -> Void)?
+    @ObservationIgnored private var isDemo = false
     @ObservationIgnored private var defaultDeviceListener: PropertyListener?
+    @ObservationIgnored private var deviceListListener: PropertyListener?
     @ObservationIgnored private var levelListeners: [PropertyListener] = []
 
     private static let volumeSelector = kAudioHardwareServiceDeviceProperty_VirtualMainVolume
@@ -26,7 +39,21 @@ final class SystemOutput {
         defaultDeviceListener = PropertyListener(.system, kAudioHardwarePropertyDefaultOutputDevice) { [weak self] in
             self?.reloadDevice()
         }
+        deviceListListener = PropertyListener(.system, kAudioHardwarePropertyDevices) { [weak self] in
+            self?.reloadDeviceList()
+        }
+        reloadDeviceList()
         reloadDevice()
+    }
+
+    func select(_ device: OutputDevice) {
+        guard device.id != deviceID else { return }
+        do {
+            try AudioObjectID.system.write(kAudioHardwarePropertyDefaultOutputDevice, value: device.id)
+            log.notice("Output switched to \(device.name, privacy: .public)")
+        } catch {
+            log.error("Could not switch output to \(device.name, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     func setVolume(_ value: Double) {
@@ -43,7 +70,20 @@ final class SystemOutput {
         isMuted = muted
     }
 
+    /// Fixed sample data for README screenshots; nothing is read from or written to the HAL after this.
+    func showDemo(name: String, symbolName: String, volume: Double, devices: [OutputDevice]) {
+        isDemo = true
+        deviceID = devices.first?.id ?? .unknown
+        self.name = name
+        self.symbolName = symbolName
+        self.volume = volume
+        canSetVolume = true
+        canMute = true
+        self.devices = devices
+    }
+
     func refreshLevels() {
+        guard !isDemo else { return }
         volume = Double((try? deviceID.read(Self.volumeSelector, scope: Self.outputScope, initial: Float32(0))) ?? 0)
         isMuted = deviceID.readBool(kAudioDevicePropertyMute, scope: Self.outputScope)
     }
@@ -55,7 +95,7 @@ final class SystemOutput {
         name = (try? current.readString(kAudioObjectPropertyName)) ?? "No output device"
         canSetVolume = current.isSettable(Self.volumeSelector, scope: Self.outputScope)
         canMute = current.isSettable(kAudioDevicePropertyMute, scope: Self.outputScope)
-        symbolName = Self.symbolName(forTransport: (try? current.read(kAudioDevicePropertyTransportType, initial: UInt32(0))) ?? 0)
+        symbolName = Self.symbolName(for: current, name: name)
         levelListeners = [Self.volumeSelector, kAudioDevicePropertyMute].map { selector in
             PropertyListener(current, selector, scope: Self.outputScope) { [weak self] in
                 self?.refreshLevels()
@@ -65,14 +105,60 @@ final class SystemOutput {
         if changed { onDeviceChange?() }
     }
 
-    private static func symbolName(forTransport transport: UInt32) -> String {
-        switch transport {
-        case kAudioDeviceTransportTypeBuiltIn: return "laptopcomputer"
-        case kAudioDeviceTransportTypeBluetooth, kAudioDeviceTransportTypeBluetoothLE: return "headphones"
-        case kAudioDeviceTransportTypeAirPlay: return "airplayaudio"
-        case kAudioDeviceTransportTypeHDMI, kAudioDeviceTransportTypeDisplayPort: return "tv"
-        case kAudioDeviceTransportTypeUSB: return "cable.connector"
-        default: return "hifispeaker.fill"
+    private func reloadDeviceList() {
+        let deviceIDs = (try? AudioObjectID.system.readObjectIDs(kAudioHardwarePropertyDevices)) ?? []
+        let found = deviceIDs.compactMap(Self.outputDevice)
+        let sorted = found.sorted { first, second in
+            if first.isBuiltIn != second.isBuiltIn { return first.isBuiltIn }
+            return first.name.localizedCaseInsensitiveCompare(second.name) == .orderedAscending
         }
+        if sorted != devices {
+            devices = sorted
+        }
+    }
+
+    /// The devices macOS itself would offer as an output: no hidden ones, none that cannot be the
+    /// default, and none of this app's own route devices.
+    private static func outputDevice(_ deviceID: AudioObjectID) -> OutputDevice? {
+        guard deviceID.streamCount(scope: outputScope) > 0,
+              deviceID.readBool(kAudioDevicePropertyDeviceCanBeDefaultDevice, scope: outputScope),
+              !deviceID.readBool(kAudioDevicePropertyIsHidden),
+              let uid = try? deviceID.readString(kAudioDevicePropertyDeviceUID),
+              !uid.hasPrefix(ProcessTap.aggregateUIDPrefix) else { return nil }
+        let name = (try? deviceID.readString(kAudioObjectPropertyName)) ?? uid
+        let transport = (try? deviceID.read(kAudioDevicePropertyTransportType, initial: UInt32(0))) ?? 0
+        return OutputDevice(
+            id: deviceID,
+            name: name,
+            symbolName: symbolName(for: deviceID, name: name),
+            isBuiltIn: transport == kAudioDeviceTransportTypeBuiltIn
+        )
+    }
+
+    private static func symbolName(for deviceID: AudioObjectID, name: String) -> String {
+        let transport = (try? deviceID.read(kAudioDevicePropertyTransportType, initial: UInt32(0))) ?? 0
+        switch transport {
+        case kAudioDeviceTransportTypeBuiltIn:
+            return "laptopcomputer"
+        case kAudioDeviceTransportTypeBluetooth, kAudioDeviceTransportTypeBluetoothLE:
+            if name.localizedCaseInsensitiveContains("AirPods Max") { return available("airpodsmax") }
+            if name.localizedCaseInsensitiveContains("AirPods Pro") { return available("airpodspro") }
+            if name.localizedCaseInsensitiveContains("AirPods") { return available("airpods") }
+            return "headphones"
+        case kAudioDeviceTransportTypeAirPlay:
+            return "airplayaudio"
+        case kAudioDeviceTransportTypeHDMI, kAudioDeviceTransportTypeDisplayPort, kAudioDeviceTransportTypeThunderbolt:
+            return "display"
+        case kAudioDeviceTransportTypeUSB:
+            return "cable.connector"
+        case kAudioDeviceTransportTypeVirtual, kAudioDeviceTransportTypeAggregate:
+            return "waveform"
+        default:
+            return "hifispeaker.fill"
+        }
+    }
+
+    private static func available(_ symbol: String) -> String {
+        NSImage(systemSymbolName: symbol, accessibilityDescription: nil) == nil ? "headphones" : symbol
     }
 }
