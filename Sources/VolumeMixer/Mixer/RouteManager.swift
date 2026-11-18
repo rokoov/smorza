@@ -91,6 +91,15 @@ final class RouteManager {
         }
     }
 
+    /// Takes every route down, for when the mixer quits.
+    func shutDown() {
+        cancelPendingWork()
+        for route in routes.values {
+            route.invalidate()
+        }
+        routes.removeAll()
+    }
+
     /// Forgets every route without touching it. After coreaudiod restarts the routes are gone and
     /// their IDs may already belong to something else.
     func abandonAll() {

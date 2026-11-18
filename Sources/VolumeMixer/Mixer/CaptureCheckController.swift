@@ -62,6 +62,14 @@ final class CaptureCheckController {
         }
     }
 
+    /// Stops a running check, for when the mixer quits.
+    func shutDown() {
+        task?.cancel()
+        task = nil
+        check?.invalidate()
+        check = nil
+    }
+
     /// Drops a running check without touching it, for after coreaudiod restarted.
     func abandon() {
         guard let check else { return }

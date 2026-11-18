@@ -208,6 +208,17 @@ final class MixerModel {
         }
     }
 
+    /// Takes every route and check down before the app exits. A process that dies with routes
+    /// running leaves coreaudiod tearing them down for up to a minute, and a mixer launched
+    /// meanwhile hangs on its first route.
+    func shutDown() {
+        heartbeat?.cancel()
+        heartbeat = nil
+        capture.shutDown()
+        routes.shutDown()
+        log.notice("Shut down")
+    }
+
     /// coreaudiod restarted: every tap, device and listener the mixer had is gone, and their IDs may
     /// already belong to something else, so nothing old is touched.
     private func audioServiceRestarted() {
