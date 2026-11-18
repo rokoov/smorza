@@ -9,6 +9,10 @@ import MixerCore
 /// output at the app's gain. Private taps and aggregates belong to this process, so if the mixer
 /// quits or crashes the system removes them and every app plays normally again.
 final class ProcessTap {
+    /// Private aggregate devices are visible to the process that made them, so the output list
+    /// recognises its own by this prefix.
+    static let aggregateUIDPrefix = "com.rokoov.volumemixer.route."
+
     let processObjectID: AudioObjectID
     let deviceUID: String
     private(set) var isRunning = false
@@ -88,7 +92,7 @@ final class ProcessTap {
     private func createAggregateDevice() throws {
         let description: [String: Any] = [
             kAudioAggregateDeviceNameKey: "Volume Mixer \(processObjectID)",
-            kAudioAggregateDeviceUIDKey: "com.rokoov.volumemixer.\(UUID().uuidString)",
+            kAudioAggregateDeviceUIDKey: "\(Self.aggregateUIDPrefix)\(UUID().uuidString)",
             kAudioAggregateDeviceMainSubDeviceKey: deviceUID,
             kAudioAggregateDeviceIsPrivateKey: true,
             kAudioAggregateDeviceIsStackedKey: false,
