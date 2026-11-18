@@ -16,6 +16,8 @@ struct MixerEntry: Identifiable, Equatable, MixerRowItem {
     var outputSymbol: String
     /// False while the picked device is away and the app falls back to the system output.
     var isOutputConnected = true
+    /// Playing solo: every other app in the mixer is muted.
+    var isSolo = false
 
     var isAdjusted: Bool { AppVolume(volume: volume, isMuted: isMuted).needsRouting }
     var isBoosted: Bool { AppVolume(volume: volume, isMuted: isMuted).isBoosted }

@@ -11,11 +11,13 @@ struct MixerRow<Icon: View, Accessory: View>: View {
     let volume: Double
     /// Where 100% sits on a slider that goes past it; nil draws no mark.
     var unityMark: Double?
-    var isBoosted = false
+    /// Colour of the level text: orange for boost, the accent for solo.
+    var levelStyle = AnyShapeStyle(.secondary)
     let isMuted: Bool
     let isEnabled: Bool
     let onChange: (Double) -> Void
     let onToggleMute: () -> Void
+    var onSolo: (() -> Void)?
     /// Sits before the mute button: an app's output menu, nothing for the device row.
     let accessory: Accessory
     @ViewBuilder let icon: () -> Icon
@@ -33,7 +35,7 @@ struct MixerRow<Icon: View, Accessory: View>: View {
                     Text(level)
                         .font(.caption)
                         .monospacedDigit()
-                        .foregroundStyle(isBoosted ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+                        .foregroundStyle(levelStyle)
                 }
                 Slider(value: Binding(get: { position }, set: onChange), in: 0...1)
                     .controlSize(.small)
@@ -48,7 +50,7 @@ struct MixerRow<Icon: View, Accessory: View>: View {
                     .help(unityMark == nil ? "" : "Past the mark boosts above 100%")
             }
             accessory
-            MuteButton(isMuted: isMuted, volume: volume, action: onToggleMute)
+            MuteButton(isMuted: isMuted, volume: volume, onSolo: onSolo, action: onToggleMute)
         }
         .frame(minHeight: PanelMetrics.rowHeight)
         .accessibilityElement(children: .contain)
