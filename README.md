@@ -8,9 +8,10 @@ process taps that macOS 14.4 and later provide.
 
 - A slider and a mute button for each app that plays sound, and the output device's own volume on top
 - Boost quiet apps up to 200%; a limiter keeps them from clipping
-- Pick the output device from the same panel
+- Pick the output device from the same panel, or send one app somewhere else: Spotify on the speakers,
+  Discord in the headphones
+- Volumes are remembered per app and per device: 40% on the speakers, 100% in the headphones
 - Browsers and Electron apps play sound from helper processes; those fold into their app (Chrome, Safari, Discord)
-- Volumes are remembered per app
 - Apps at 100% are never touched. Only apps you turn down or mute go through the mixer
 - Universal app for Apple silicon and Intel Macs
 
@@ -77,7 +78,8 @@ disappears, helpers show under their own names.
 ## Known issues
 
 - A turned-down app that was idle starts a few milliseconds late when it plays again
-- While an app is turned down its sound plays on the default output, even if the app picked another device
+- While an app is routed its sound plays on the device chosen in the mixer (or the system output), even if the
+  app picked another device in its own settings
 - Other audio routing tools (Background Music, SoundSource, Loopback) can fight over the same apps
 - macOS may ask for the permission again after an update
 

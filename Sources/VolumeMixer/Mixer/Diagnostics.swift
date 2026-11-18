@@ -28,7 +28,8 @@ enum Diagnostics {
         output.start()
         print("Output devices: \(output.devices.count)")
         for item in output.devices {
-            print("  \(item.id == output.deviceID ? "*" : " ") \(item.id) \(item.name) [\(item.symbolName)]")
+            let marker = item.id == output.deviceID ? "*" : " "
+            print("  \(marker) \(item.id) \(item.name) [\(item.symbolName)] \(item.uid)")
         }
 
         let resolver = AppResolver()

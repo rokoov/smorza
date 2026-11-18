@@ -9,6 +9,13 @@ struct MixerEntry: Identifiable, Equatable, MixerRowItem {
     var volume: Double
     var isMuted: Bool
     var isPlaying: Bool
+    /// The device the user picked for the app, or nil when it follows the system output.
+    var outputDeviceUID: String?
+    var outputDeviceName: String?
+    /// The symbol of the device the app plays on now.
+    var outputSymbol: String
+    /// False while the picked device is away and the app falls back to the system output.
+    var isOutputConnected = true
 
     var isAdjusted: Bool { AppVolume(volume: volume, isMuted: isMuted).needsRouting }
     var isBoosted: Bool { AppVolume(volume: volume, isMuted: isMuted).isBoosted }

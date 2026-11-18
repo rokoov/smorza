@@ -26,7 +26,7 @@ final class MixerModel {
     private let routes = RouteManager()
     @ObservationIgnored private let monitor = AudioProcessMonitor()
     @ObservationIgnored private let resolver = AppResolver()
-    @ObservationIgnored private let store = AppVolumeStore()
+    @ObservationIgnored private let store = MixerSettingsStore()
     @ObservationIgnored private var identities: [AudioObjectID: AppIdentity] = [:]
     @ObservationIgnored private var listedKeys: Set<String> = []
     @ObservationIgnored private var rowSummary: [String] = []
@@ -86,15 +86,22 @@ final class MixerModel {
     }
 
     func setVolume(_ volume: Double, for key: String) {
-        var setting = store[key]
+        var setting = store.volume(for: key, on: outputDeviceUID(for: key))
         setting.volume = min(max(volume, 0), VolumeCurve.maximum)
         apply(setting, to: key)
     }
 
     func toggleMute(for key: String) {
-        var setting = store[key]
+        var setting = store.volume(for: key, on: outputDeviceUID(for: key))
         setting.isMuted.toggle()
         apply(setting, to: key)
+    }
+
+    /// Sends the app to `device`, or back to the system output with nil.
+    func setOutputDevice(_ device: OutputDevice?, for key: String) {
+        store.setOutputDevice(uid: device?.uid, name: device?.name, for: key)
+        routes.clearFailures(for: key)
+        syncRoutes()
     }
 
     func retryCaptureCheck() {
@@ -103,7 +110,7 @@ final class MixerModel {
     }
 
     private func apply(_ setting: AppVolume, to key: String) {
-        store[key] = setting
+        store.setVolume(setting, for: key, on: outputDeviceUID(for: key))
         if let index = entries.firstIndex(where: { $0.id == key }) {
             entries[index].volume = setting.volume
             entries[index].isMuted = setting.isMuted
@@ -123,7 +130,12 @@ final class MixerModel {
 
     private func syncRoutes() {
         let apps = currentApps()
-        if routesAudio, apps.contains(where: \.setting.needsRouting), capture.state != .allowed {
+        // A device an app plays on for the first time gets its own copy of the app's last volume,
+        // so a later change on another device leaves this one alone.
+        for app in apps where !app.settings.isDefault {
+            store.adoptVolume(for: app.key, on: app.outputDeviceUID)
+        }
+        if routesAudio, apps.contains(where: \.needsRoute), capture.state != .allowed {
             capture.begin(on: output.deviceID)
         }
         let canRoute = routesAudio && capture.state == .allowed
@@ -133,10 +145,10 @@ final class MixerModel {
                     key: app.key,
                     label: app.identity.name,
                     processObjectIDs: app.processObjectIDs,
-                    outputDevice: output.deviceID,
-                    gain: app.setting.gain,
+                    outputDevice: app.outputDeviceID,
+                    gain: app.volume.gain,
                     isPlaying: app.isPlaying,
-                    isWanted: canRoute && app.setting.needsRouting
+                    isWanted: canRoute && app.needsRoute
                 )
             }
         )
@@ -153,8 +165,25 @@ final class MixerModel {
             identityByKey[identity.key] = identity
         }
         return identityByKey.map { key, identity in
-            AppAudio(identity: identity, clients: clientsByKey[key, default: []], setting: store[key])
+            let settings = store.settings(for: key)
+            let chosen = settings.outputDeviceUID.flatMap(output.device(withUID:))
+            let device = chosen ?? output.device(withUID: output.deviceUID)
+            return AppAudio(
+                identity: identity,
+                clients: clientsByKey[key, default: []],
+                settings: settings,
+                chosenDevice: chosen,
+                outputDeviceID: chosen?.id ?? output.deviceID,
+                outputDeviceUID: chosen?.uid ?? output.deviceUID,
+                outputSymbol: device?.symbolName ?? output.symbolName,
+                isRedirected: chosen.map { $0.id != output.deviceID } ?? false
+            )
         }
+    }
+
+    /// Where the app plays now: its picked device while connected, otherwise the system output.
+    private func outputDeviceUID(for key: String) -> String {
+        store.settings(for: key).outputDeviceUID.flatMap(output.device(withUID:))?.uid ?? output.deviceUID
     }
 
     private func rebuildEntries(from apps: [AppAudio]) {
@@ -162,16 +191,20 @@ final class MixerModel {
         // Once an app has a row it keeps it until it quits, so pausing it or dragging it back to
         // 100% never pulls the row away in the middle of an adjustment.
         listedKeys.formIntersection(apps.map(\.key))
-        let shown = apps.filter { $0.isPlaying || $0.setting.needsRouting || listedKeys.contains($0.key) }
+        let shown = apps.filter { $0.isPlaying || $0.needsRoute || listedKeys.contains($0.key) }
         listedKeys.formUnion(shown.map(\.key))
         let rows = shown.map { app in
             MixerEntry(
                 id: app.key,
                 name: app.identity.name,
                 icon: app.identity.icon,
-                volume: app.setting.volume,
-                isMuted: app.setting.isMuted,
-                isPlaying: app.isPlaying
+                volume: app.volume.volume,
+                isMuted: app.volume.isMuted,
+                isPlaying: app.isPlaying,
+                outputDeviceUID: app.settings.outputDeviceUID,
+                outputDeviceName: app.settings.outputDeviceName,
+                outputSymbol: app.outputSymbol,
+                isOutputConnected: app.settings.outputDeviceUID == nil || app.chosenDevice != nil
             )
         }
         let ordered = RowOrder.arrange(rows, keepingPlacesOf: isPanelVisible ? entries.map(\.id) : nil)
