@@ -12,6 +12,8 @@ struct MixerEntry: Identifiable, Equatable {
     var volume: Double
     var isMuted: Bool
     var isPlaying: Bool
+
+    var isAdjusted: Bool { AppVolume(volume: volume, isMuted: isMuted).needsRouting }
 }
 
 enum Tuning {
@@ -34,6 +36,10 @@ final class MixerModel {
     private(set) var entries: [MixerEntry] = []
     private(set) var permission = AudioCapturePermission.current()
     private(set) var routingError: String?
+    /// Set the first time a route delivers real audio. The TCC check cannot be trusted for this
+    /// permission (it reports "undetermined" even once allowed), so audio itself is the proof.
+    private(set) var isCaptureConfirmed = UserDefaults.standard.bool(forKey: MixerModel.captureConfirmedKey)
+    private static let captureConfirmedKey = "CaptureConfirmed"
     let output = SystemOutput()
     /// Off only for the `--snapshot` preview, which must never touch anyone's audio.
     @ObservationIgnored var routesAudio = true
@@ -51,7 +57,8 @@ final class MixerModel {
     @ObservationIgnored private var heartbeat: Task<Void, Never>?
     @ObservationIgnored private var napBlocker: NSObjectProtocol?
     @ObservationIgnored private var isPanelVisible = false
-    @ObservationIgnored private var playingNames: [String] = []
+    @ObservationIgnored private var rowSummary: [String] = []
+    @ObservationIgnored private var listedKeys: Set<String> = []
 
     func start() {
         monitor.onChange = { [weak self] in self?.clientsChanged() }
@@ -62,16 +69,22 @@ final class MixerModel {
     }
 
     func panelDidAppear() {
-        isPanelVisible = true
+        guard !isPanelVisible else { return }
+        // Fresh state first, while rows may still reorder; then they hold still until it closes.
         monitor.refreshPlaying()
         output.refreshLevels()
         refreshPermission()
+        isPanelVisible = true
         updateBackgroundWork()
+        log.notice("Panel opened")
     }
 
     func panelDidDisappear() {
+        guard isPanelVisible else { return }
         isPanelVisible = false
+        rebuildEntries()
         updateBackgroundWork()
+        log.notice("Panel closed")
     }
 
     func setVolume(_ volume: Double, for key: String) {
@@ -286,6 +299,7 @@ final class MixerModel {
             let peak = tap.takePeak()
             if peak > 0, receivingAudio.insert(objectID).inserted {
                 log.notice("Receiving audio from \(self.label(objectID), privacy: .public), peak \(peak, format: .fixed(precision: 3))")
+                confirmCapture()
             }
         }
         if permission != .authorized {
@@ -294,11 +308,14 @@ final class MixerModel {
     }
 
     private func rebuildEntries() {
+        // Once an app has a row it keeps it until it quits, so pausing it or dragging it back to
+        // 100% never pulls the row away in the middle of an adjustment.
+        listedKeys.formIntersection(identities.values.map(\.key))
         var grouped: [String: MixerEntry] = [:]
         for (objectID, client) in monitor.clients {
             guard let identity = identities[objectID] else { continue }
             let setting = store[identity.key]
-            guard client.isPlaying || setting.needsRouting else { continue }
+            guard client.isPlaying || setting.needsRouting || listedKeys.contains(identity.key) else { continue }
             if grouped[identity.key] == nil {
                 grouped[identity.key] = MixerEntry(
                     id: identity.key,
@@ -312,19 +329,39 @@ final class MixerModel {
                 grouped[identity.key]?.isPlaying = true
             }
         }
-        // Apps making sound first, where the hand goes most often; names keep the order stable.
-        let sorted = grouped.values.sorted { first, second in
-            if first.isPlaying != second.isPlaying { return first.isPlaying }
-            return first.name.localizedCaseInsensitiveCompare(second.name) == .orderedAscending
+        listedKeys.formUnion(grouped.keys)
+        let ordered = order(Array(grouped.values))
+        if ordered != entries {
+            entries = ordered
         }
-        if sorted != entries {
-            entries = sorted
+        let summary = ordered.map { $0.isPlaying ? "\($0.name) (playing)" : $0.name }
+        if summary != rowSummary {
+            rowSummary = summary
+            log.notice("Rows: \(summary.isEmpty ? "none" : summary.joined(separator: ", "), privacy: .public)")
         }
-        let playing = sorted.filter(\.isPlaying).map(\.name)
-        if playing != playingNames {
-            playingNames = playing
-            log.notice("Playing: \(playing.isEmpty ? "nothing" : playing.joined(separator: ", "), privacy: .public)")
-        }
+    }
+
+    /// Apps making sound come first, where the hand goes most often. While the panel is open the
+    /// rows keep their places instead, so nothing moves under the pointer.
+    private func order(_ fresh: [MixerEntry]) -> [MixerEntry] {
+        let byActivity = fresh.sorted(by: Self.playingFirst)
+        guard isPanelVisible else { return byActivity }
+        let positions = Dictionary(uniqueKeysWithValues: entries.enumerated().map { ($1.id, $0) })
+        let kept = byActivity
+            .filter { positions[$0.id] != nil }
+            .sorted { positions[$0.id, default: 0] < positions[$1.id, default: 0] }
+        return kept + byActivity.filter { positions[$0.id] == nil }
+    }
+
+    private static func playingFirst(_ first: MixerEntry, _ second: MixerEntry) -> Bool {
+        if first.isPlaying != second.isPlaying { return first.isPlaying }
+        return first.name.localizedCaseInsensitiveCompare(second.name) == .orderedAscending
+    }
+
+    private func confirmCapture() {
+        guard !isCaptureConfirmed else { return }
+        isCaptureConfirmed = true
+        UserDefaults.standard.set(true, forKey: Self.captureConfirmedKey)
     }
 
     private func label(_ objectID: AudioObjectID) -> String {

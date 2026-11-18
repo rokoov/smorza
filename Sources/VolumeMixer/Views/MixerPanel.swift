@@ -28,7 +28,7 @@ struct MixerPanel: View {
                 PermissionNotice()
             }
             apps
-            if model.permission == .undetermined, model.entries.contains(where: { $0.volume < 1 || $0.isMuted }) {
+            if model.permission != .denied, !model.isCaptureConfirmed, model.entries.contains(where: \.isAdjusted) {
                 Text("If macOS asks to record system audio, allow it. That is how one app gets quieter.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -49,11 +49,16 @@ struct MixerPanel: View {
         }
         .frame(width: PanelMetrics.width)
         .animation(reduceMotion ? nil : .snappy(duration: 0.22), value: model.entries.map(\.id))
-        .onAppear {
-            model.panelDidAppear()
-            loginItem.refresh()
-        }
-        .onDisappear { model.panelDidDisappear() }
+        .background(
+            WindowVisibilityReader { isVisible in
+                if isVisible {
+                    model.panelDidAppear()
+                    loginItem.refresh()
+                } else {
+                    model.panelDidDisappear()
+                }
+            }
+        )
     }
 
     @ViewBuilder
