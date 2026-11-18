@@ -10,7 +10,8 @@ struct OutputRow: View {
             title: output.name,
             level: output.canSetVolume
                 ? (output.isMuted ? "Muted" : "\(VolumeCurve.percent(output.volume))%") : "Fixed",
-            value: output.volume,
+            position: output.volume,
+            volume: output.volume,
             isMuted: output.isMuted,
             isEnabled: output.canSetVolume,
             onChange: { output.setVolume($0) },

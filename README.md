@@ -7,6 +7,7 @@ Windows. Nothing to install besides the app: no audio driver, no kernel extensio
 process taps that macOS 14.4 and later provide.
 
 - A slider and a mute button for each app that plays sound, and the output device's own volume on top
+- Boost quiet apps up to 200%; a limiter keeps them from clipping
 - Pick the output device from the same panel
 - Browsers and Electron apps play sound from helper processes; those fold into their app (Chrome, Safari, Discord)
 - Volumes are remembered per app
