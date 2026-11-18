@@ -16,6 +16,15 @@ struct MixerEntry: Identifiable, Equatable {
     var isAdjusted: Bool { AppVolume(volume: volume, isMuted: isMuted).needsRouting }
 }
 
+/// Whether macOS lets the mixer hear other apps (System Audio Recording).
+enum CaptureState: Equatable {
+    /// Not checked yet, or a failed check is being retried.
+    case unknown
+    case checking
+    case allowed
+    case blocked
+}
+
 enum Tuning {
     /// How long an app may stay silent before its route stops, so a gap between songs keeps it warm.
     static let idleStopDelay: Duration = .seconds(5)
@@ -26,20 +35,28 @@ enum Tuning {
     static let routeAttempts = 3
     static let retryDelay: Duration = .milliseconds(400)
     static let heartbeat: Duration = .seconds(1)
+    /// How often a running capture check looks for its signal.
+    static let capturePoll: Duration = .milliseconds(100)
+    /// A check is rebuilt this often: one started while macOS was still asking may keep hearing
+    /// silence after the user allowed it.
+    static let captureRestart: Duration = .seconds(5)
+    /// How long the user has to answer the macOS prompt before the notice shows.
+    static let captureTimeout: Duration = .seconds(30)
+    /// Pause after waking from sleep, while devices come back, before routes are rebuilt.
+    static let wakeRebuildDelay: Duration = .seconds(2)
 }
 
-/// Owns the per-app routes: builds a tap for every app that is not at full volume, starts it
-/// while the app plays and rebuilds them all when the output device changes.
+/// Owns the routes: one tap for every app that is not at full volume, started while the app plays,
+/// built only once a capture check proved macOS lets the mixer hear other apps, and rebuilt when
+/// the output device changes, the Mac wakes or the audio service restarts.
 @MainActor
 @Observable
 final class MixerModel {
     private(set) var entries: [MixerEntry] = []
-    private(set) var permission = AudioCapturePermission.current()
+    private(set) var captureState = CaptureState.unknown
+    /// Keeps the notice up while a retry runs after a failed check.
+    private(set) var wasCaptureBlocked = false
     private(set) var routingError: String?
-    /// Set the first time a route delivers real audio. The TCC check cannot be trusted for this
-    /// permission (it reports "undetermined" even once allowed), so audio itself is the proof.
-    private(set) var isCaptureConfirmed = UserDefaults.standard.bool(forKey: MixerModel.captureConfirmedKey)
-    private static let captureConfirmedKey = "CaptureConfirmed"
     let output = SystemOutput()
     /// Off only for the `--snapshot` preview, which must never touch anyone's audio.
     @ObservationIgnored var routesAudio = true
@@ -48,24 +65,36 @@ final class MixerModel {
     @ObservationIgnored private let resolver = AppResolver()
     @ObservationIgnored private let store = AppVolumeStore()
     @ObservationIgnored private var identities: [AudioObjectID: AppIdentity] = [:]
-    @ObservationIgnored private var taps: [AudioObjectID: ProcessTap] = [:]
-    @ObservationIgnored private var pendingStops: [AudioObjectID: Task<Void, Never>] = [:]
-    @ObservationIgnored private var pendingRemovals: [AudioObjectID: Task<Void, Never>] = [:]
-    @ObservationIgnored private var failedAttempts: [AudioObjectID: Int] = [:]
-    @ObservationIgnored private var receivingAudio: Set<AudioObjectID> = []
+    @ObservationIgnored private var routes: [String: ProcessTap] = [:]
+    @ObservationIgnored private var pendingStops: [String: Task<Void, Never>] = [:]
+    @ObservationIgnored private var pendingRemovals: [String: Task<Void, Never>] = [:]
+    @ObservationIgnored private var failedAttempts: [String: Int] = [:]
+    @ObservationIgnored private var receivingAudio: Set<String> = []
     @ObservationIgnored private var retryTask: Task<Void, Never>?
     @ObservationIgnored private var heartbeat: Task<Void, Never>?
+    @ObservationIgnored private var captureCheck: CaptureCheck?
+    @ObservationIgnored private var captureTask: Task<Void, Never>?
     @ObservationIgnored private var napBlocker: NSObjectProtocol?
+    @ObservationIgnored private var restartListener: PropertyListener?
+    @ObservationIgnored private var wakeObserver: NSObjectProtocol?
     @ObservationIgnored private var isPanelVisible = false
     @ObservationIgnored private var rowSummary: [String] = []
     @ObservationIgnored private var listedKeys: Set<String> = []
 
     func start() {
         monitor.onChange = { [weak self] in self?.clientsChanged() }
-        output.onDeviceChange = { [weak self] in self?.rebuildRoutes(reason: "output device changed") }
+        output.onDeviceChange = { [weak self] in self?.outputDeviceChanged() }
         output.start()
         monitor.start()
-        log.notice("Started with audio capture permission \(self.permission.rawValue, privacy: .public)")
+        listenForServiceRestart()
+        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.systemDidWake() }
+        }
+        log.notice("Started")
     }
 
     func panelDidAppear() {
@@ -73,7 +102,6 @@ final class MixerModel {
         // Fresh state first, while rows may still reorder; then they hold still until it closes.
         monitor.refreshPlaying()
         output.refreshLevels()
-        refreshPermission()
         isPanelVisible = true
         updateBackgroundWork()
         log.notice("Panel opened")
@@ -99,17 +127,24 @@ final class MixerModel {
         apply(setting, to: key)
     }
 
+    func retryCaptureCheck() {
+        guard captureState == .blocked else { return }
+        captureState = .unknown
+        syncRoutes()
+    }
+
     private func apply(_ setting: AppVolume, to key: String) {
         store[key] = setting
         if let index = entries.firstIndex(where: { $0.id == key }) {
             entries[index].volume = setting.volume
             entries[index].isMuted = setting.isMuted
         }
-        for (objectID, tap) in taps where identities[objectID]?.key == key {
-            tap.gain = setting.gain
+        routes[key]?.gain = setting.gain
+        // Touching a slider gives a failed route, or a failed capture check, another chance.
+        failedAttempts[key] = nil
+        if captureState == .blocked {
+            captureState = .unknown
         }
-        // Touching a slider gives an app whose route failed another chance.
-        failedAttempts = failedAttempts.filter { identities[$0.key]?.key != key }
         syncRoutes()
     }
 
@@ -117,69 +152,90 @@ final class MixerModel {
         let clients = monitor.clients
         identities = clients.mapValues { resolver.identity(for: $0) }
         resolver.forget(allBut: Set(clients.values.map(\.pid)))
-        for objectID in taps.keys.filter({ clients[$0] == nil }) {
-            removeRoute(objectID)
-        }
-        failedAttempts = failedAttempts.filter { clients[$0.key] != nil }
         syncRoutes()
     }
 
     private func syncRoutes() {
-        let canRoute = routesAudio && permission != .denied
-        for (objectID, client) in monitor.clients {
-            guard let identity = identities[objectID] else { continue }
-            let setting = store[identity.key]
-            guard canRoute, setting.needsRouting else {
-                if taps[objectID] != nil { scheduleRemoval(objectID) }
+        let apps = Dictionary(grouping: monitor.clients.values) { identities[$0.objectID]?.key ?? "" }
+        let wanted = Set(apps.keys.filter { !$0.isEmpty && routesAudio && store[$0].needsRouting })
+        if !wanted.isEmpty, captureState != .allowed {
+            beginCaptureCheck()
+        }
+
+        for key in routes.keys.filter({ apps[$0] == nil }) {
+            removeRoute(key)
+        }
+        for (key, clients) in apps where !key.isEmpty {
+            guard wanted.contains(key), captureState == .allowed else {
+                if routes[key] != nil { scheduleRemoval(key) }
                 continue
             }
-            Self.cancel(&pendingRemovals, objectID)
-            guard (failedAttempts[objectID] ?? 0) < Tuning.routeAttempts,
-                  let tap = taps[objectID] ?? makeRoute(for: objectID, gain: setting.gain) else { continue }
-            if client.isPlaying {
-                Self.cancel(&pendingStops, objectID)
-                startRoute(tap, objectID: objectID)
-            } else if tap.isRunning {
-                scheduleStop(objectID)
+            Self.cancel(&pendingRemovals, key)
+            let processes = clients.map(\.objectID).sorted()
+            guard (failedAttempts[key] ?? 0) < Tuning.routeAttempts,
+                  let route = route(for: key, processes: processes) else { continue }
+            if clients.contains(where: \.isPlaying) {
+                Self.cancel(&pendingStops, key)
+                startRoute(route, key: key)
+            } else if route.isRunning {
+                scheduleStop(key)
             }
         }
         updateBackgroundWork()
         rebuildEntries()
     }
 
-    private func makeRoute(for objectID: AudioObjectID, gain: Float) -> ProcessTap? {
+    private func route(for key: String, processes: [AudioObjectID]) -> ProcessTap? {
+        guard let existing = routes[key] else {
+            return makeRoute(for: key, processes: processes)
+        }
+        guard existing.processObjectIDs != processes else { return existing }
+        do {
+            try existing.setProcesses(processes)
+            log.notice("Route for \(self.name(of: key), privacy: .public) now taps \(processes.count) processes")
+            return existing
+        } catch {
+            log.error("Could not update the route for \(self.name(of: key), privacy: .public): \(error.localizedDescription, privacy: .public)")
+            routes[key] = nil
+            let replacement = makeRoute(for: key, processes: processes)
+            existing.invalidate()
+            return replacement
+        }
+    }
+
+    private func makeRoute(for key: String, processes: [AudioObjectID]) -> ProcessTap? {
         guard output.deviceID.isKnown else { return nil }
         do {
-            let tap = try ProcessTap(processObjectID: objectID, outputDevice: output.deviceID, gain: gain)
-            taps[objectID] = tap
-            log.notice("Routing \(self.label(objectID), privacy: .public) to \(tap.deviceUID, privacy: .public)")
-            return tap
+            let route = try ProcessTap(label: name(of: key), processObjectIDs: processes, outputDevice: output.deviceID, gain: store[key].gain)
+            routes[key] = route
+            log.notice("Routing \(self.name(of: key), privacy: .public) (\(processes.count) processes) to \(route.deviceUID, privacy: .public)")
+            return route
         } catch {
-            recordFailure(objectID, error)
+            recordFailure(key, error)
             return nil
         }
     }
 
-    private func startRoute(_ tap: ProcessTap, objectID: AudioObjectID) {
-        guard !tap.isRunning else { return }
+    private func startRoute(_ route: ProcessTap, key: String) {
+        guard !route.isRunning else { return }
         do {
-            try tap.start()
-            failedAttempts[objectID] = nil
+            try route.start()
+            failedAttempts[key] = nil
             routingError = nil
         } catch {
-            recordFailure(objectID, error)
+            recordFailure(key, error)
             // The tap mutes the app, so a route that will not start must not stay around.
-            if (failedAttempts[objectID] ?? 0) >= Tuning.routeAttempts {
-                removeRoute(objectID)
+            if (failedAttempts[key] ?? 0) >= Tuning.routeAttempts {
+                removeRoute(key)
             }
         }
     }
 
-    private func recordFailure(_ objectID: AudioObjectID, _ error: Error) {
-        let attempts = (failedAttempts[objectID] ?? 0) + 1
-        failedAttempts[objectID] = attempts
-        routingError = "\(identities[objectID]?.name ?? "An app"): \(error.localizedDescription)"
-        log.error("Route for \(self.label(objectID), privacy: .public) failed (attempt \(attempts)): \(error.localizedDescription, privacy: .public)")
+    private func recordFailure(_ key: String, _ error: Error) {
+        let attempts = (failedAttempts[key] ?? 0) + 1
+        failedAttempts[key] = attempts
+        routingError = "\(name(of: key)): \(error.localizedDescription)"
+        log.error("Route for \(self.name(of: key), privacy: .public) failed (attempt \(attempts)): \(error.localizedDescription, privacy: .public)")
         // A just-made aggregate device is sometimes not ready yet, so try again shortly.
         guard attempts < Tuning.routeAttempts, retryTask == nil else { return }
         retryTask = Task { [weak self] in
@@ -190,95 +246,176 @@ final class MixerModel {
         }
     }
 
-    private func scheduleStop(_ objectID: AudioObjectID) {
-        guard pendingStops[objectID] == nil else { return }
-        pendingStops[objectID] = Task { [weak self] in
+    private func scheduleStop(_ key: String) {
+        guard pendingStops[key] == nil else { return }
+        pendingStops[key] = Task { [weak self] in
             try? await Task.sleep(for: Tuning.idleStopDelay)
             guard !Task.isCancelled, let self else { return }
-            self.pendingStops[objectID] = nil
-            guard self.monitor.clients[objectID]?.isPlaying != true else { return }
-            self.taps[objectID]?.stop()
-            self.receivingAudio.remove(objectID)
+            self.pendingStops[key] = nil
+            guard !self.isPlaying(key) else { return }
+            self.routes[key]?.stop()
+            self.receivingAudio.remove(key)
             self.updateBackgroundWork()
         }
     }
 
-    private func scheduleRemoval(_ objectID: AudioObjectID) {
-        guard pendingRemovals[objectID] == nil else { return }
-        pendingRemovals[objectID] = Task { [weak self] in
+    private func scheduleRemoval(_ key: String) {
+        guard pendingRemovals[key] == nil else { return }
+        pendingRemovals[key] = Task { [weak self] in
             try? await Task.sleep(for: Tuning.removeDelay)
             guard !Task.isCancelled, let self else { return }
-            self.pendingRemovals[objectID] = nil
-            let stillWanted = self.permission != .denied
-                && (self.identities[objectID].map { self.store[$0.key].needsRouting } ?? false)
+            self.pendingRemovals[key] = nil
+            let stillWanted = self.routesAudio && self.captureState == .allowed && self.store[key].needsRouting
             guard !stillWanted else { return }
-            self.removeRoute(objectID)
+            self.removeRoute(key)
             self.updateBackgroundWork()
         }
     }
 
-    private func removeRoute(_ objectID: AudioObjectID) {
-        Self.cancel(&pendingStops, objectID)
-        Self.cancel(&pendingRemovals, objectID)
-        receivingAudio.remove(objectID)
-        guard let tap = taps.removeValue(forKey: objectID) else { return }
-        tap.invalidate()
-        log.notice("Stopped routing \(self.label(objectID), privacy: .public)")
+    private func removeRoute(_ key: String) {
+        Self.cancel(&pendingStops, key)
+        Self.cancel(&pendingRemovals, key)
+        receivingAudio.remove(key)
+        guard let route = routes.removeValue(forKey: key) else { return }
+        route.invalidate()
+        log.notice("Stopped routing \(route.label, privacy: .public)")
     }
 
     /// Builds every route again on the current output device. New routes start before the old
     /// ones go, so the app is never left playing at full volume in between.
     private func rebuildRoutes(reason: String) {
-        guard !taps.isEmpty else {
+        guard !routes.isEmpty else {
             syncRoutes()
             return
         }
-        log.notice("Rebuilding \(self.taps.count) routes: \(reason, privacy: .public)")
-        let previous = taps
-        taps.removeAll()
+        log.notice("Rebuilding \(self.routes.count) routes: \(reason, privacy: .public)")
+        let previous = routes
+        routes.removeAll()
+        cancelPendingWork()
+        syncRoutes()
+        previous.values.forEach { $0.invalidate() }
+    }
+
+    private func cancelPendingWork() {
         pendingStops.values.forEach { $0.cancel() }
         pendingRemovals.values.forEach { $0.cancel() }
         pendingStops.removeAll()
         pendingRemovals.removeAll()
         receivingAudio.removeAll()
         failedAttempts.removeAll()
-        syncRoutes()
-        previous.values.forEach { $0.invalidate() }
     }
 
-    private func refreshPermission() {
-        let current = AudioCapturePermission.current()
-        guard current != permission else { return }
-        let previous = permission
-        permission = current
-        log.notice("Audio capture permission \(previous.rawValue, privacy: .public) -> \(current.rawValue, privacy: .public)")
-        switch current {
-        case .denied:
-            // A denied tap only hears silence while it keeps the app muted: give the sound back.
-            for objectID in Array(taps.keys) {
-                removeRoute(objectID)
+    private func beginCaptureCheck() {
+        guard captureState == .unknown, captureCheck == nil, startCaptureCheck() else { return }
+        captureState = .checking
+        log.notice("Checking that macOS lets the mixer hear other apps")
+        let started = ContinuousClock.now
+        captureTask = Task { [weak self] in
+            var lastStart = started
+            while !Task.isCancelled {
+                try? await Task.sleep(for: Tuning.capturePoll)
+                guard !Task.isCancelled, let self else { return }
+                let now = ContinuousClock.now
+                if self.captureCheck?.hasHeardSignal == true {
+                    self.finishCaptureCheck(allowed: true, after: now - started)
+                    return
+                }
+                if now - started >= Tuning.captureTimeout {
+                    self.finishCaptureCheck(allowed: false, after: now - started)
+                    return
+                }
+                if now - lastStart >= Tuning.captureRestart {
+                    lastStart = now
+                    self.restartCaptureCheck()
+                }
             }
-            updateBackgroundWork()
-        case .authorized:
-            // A route started while the prompt was open can keep delivering silence.
-            rebuildRoutes(reason: "permission granted")
-        case .undetermined:
-            break
+        }
+        updateBackgroundWork()
+    }
+
+    @discardableResult
+    private func startCaptureCheck() -> Bool {
+        guard output.deviceID.isKnown else { return false }
+        do {
+            captureCheck = try CaptureCheck(outputDevice: output.deviceID)
+            return true
+        } catch {
+            routingError = "Audio check: \(error.localizedDescription)"
+            log.error("Capture check could not start: \(error.localizedDescription, privacy: .public)")
+            return false
         }
     }
 
+    private func restartCaptureCheck() {
+        captureCheck?.invalidate()
+        captureCheck = nil
+        startCaptureCheck()
+    }
+
+    private func finishCaptureCheck(allowed: Bool, after elapsed: Duration) {
+        captureTask?.cancel()
+        captureTask = nil
+        captureCheck?.invalidate()
+        captureCheck = nil
+        captureState = allowed ? .allowed : .blocked
+        wasCaptureBlocked = !allowed
+        log.notice("Capture check \(allowed ? "passed" : "failed", privacy: .public) after \(elapsed.formatted(.units(allowed: [.seconds, .milliseconds])), privacy: .public)")
+        syncRoutes()
+    }
+
+    private func outputDeviceChanged() {
+        if captureCheck != nil {
+            restartCaptureCheck()
+        }
+        rebuildRoutes(reason: "output device changed")
+    }
+
+    private func systemDidWake() {
+        guard !routes.isEmpty else { return }
+        Task { [weak self] in
+            try? await Task.sleep(for: Tuning.wakeRebuildDelay)
+            self?.rebuildRoutes(reason: "woke from sleep")
+        }
+    }
+
+    private func listenForServiceRestart() {
+        restartListener = PropertyListener(.system, kAudioHardwarePropertyServiceRestarted) { [weak self] in
+            self?.audioServiceRestarted()
+        }
+    }
+
+    /// coreaudiod restarted: every tap, device and listener the mixer had is gone, and their IDs
+    /// may already belong to something else, so nothing old is touched.
+    private func audioServiceRestarted() {
+        log.notice("Audio service restarted, starting over")
+        routes.values.forEach { $0.abandon() }
+        routes.removeAll()
+        cancelPendingWork()
+        if let captureCheck {
+            captureCheck.abandon()
+            self.captureCheck = nil
+            captureTask?.cancel()
+            captureTask = nil
+            captureState = .unknown
+        }
+        listenForServiceRestart()
+        output.start()
+        monitor.restart()
+    }
+
     private func updateBackgroundWork() {
-        if !taps.isEmpty, napBlocker == nil {
+        let isBusy = !routes.isEmpty || captureCheck != nil
+        if isBusy, napBlocker == nil {
             // App Nap would delay the "started playing" notice and leave a routed app muted for longer.
             napBlocker = ProcessInfo.processInfo.beginActivity(options: .userInitiatedAllowingIdleSystemSleep, reason: "Routing app audio")
-        } else if taps.isEmpty, let blocker = napBlocker {
+        } else if !isBusy, let blocker = napBlocker {
             ProcessInfo.processInfo.endActivity(blocker)
             napBlocker = nil
         }
 
         // The heartbeat also catches playing changes macOS never announces: a turned-down app that
         // starts playing unnoticed would stay muted by its tap.
-        let needsHeartbeat = !taps.isEmpty || isPanelVisible
+        let needsHeartbeat = !routes.isEmpty || isPanelVisible
         if needsHeartbeat, heartbeat == nil {
             heartbeat = Task { [weak self] in
                 while !Task.isCancelled {
@@ -295,15 +432,11 @@ final class MixerModel {
 
     private func beat() {
         monitor.refreshPlaying()
-        for (objectID, tap) in taps where tap.isRunning {
-            let peak = tap.takePeak()
-            if peak > 0, receivingAudio.insert(objectID).inserted {
-                log.notice("Receiving audio from \(self.label(objectID), privacy: .public), peak \(peak, format: .fixed(precision: 3))")
-                confirmCapture()
+        for (key, route) in routes where route.isRunning {
+            let peak = route.takePeak()
+            if peak > 0, receivingAudio.insert(key).inserted {
+                log.notice("Receiving audio from \(self.name(of: key), privacy: .public), peak \(peak, format: .fixed(precision: 3))")
             }
-        }
-        if permission != .authorized {
-            refreshPermission()
         }
     }
 
@@ -358,19 +491,15 @@ final class MixerModel {
         return first.name.localizedCaseInsensitiveCompare(second.name) == .orderedAscending
     }
 
-    private func confirmCapture() {
-        guard !isCaptureConfirmed else { return }
-        isCaptureConfirmed = true
-        UserDefaults.standard.set(true, forKey: Self.captureConfirmedKey)
+    private func isPlaying(_ key: String) -> Bool {
+        monitor.clients.values.contains { $0.isPlaying && identities[$0.objectID]?.key == key }
     }
 
-    private func label(_ objectID: AudioObjectID) -> String {
-        let name = identities[objectID]?.name ?? "process object"
-        let pid = monitor.clients[objectID].map { String($0.pid) } ?? "?"
-        return "\(name) (pid \(pid))"
+    private func name(of key: String) -> String {
+        identities.values.first { $0.key == key }?.name ?? key
     }
 
-    private static func cancel(_ tasks: inout [AudioObjectID: Task<Void, Never>], _ objectID: AudioObjectID) {
-        tasks.removeValue(forKey: objectID)?.cancel()
+    private static func cancel(_ tasks: inout [String: Task<Void, Never>], _ key: String) {
+        tasks.removeValue(forKey: key)?.cancel()
     }
 }

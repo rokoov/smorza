@@ -25,6 +25,13 @@ final class AudioProcessMonitor {
         reload()
     }
 
+    /// Starts over after coreaudiod restarted: every listener and object ID from before is gone.
+    func restart() {
+        playingListeners.removeAll()
+        clients.removeAll()
+        start()
+    }
+
     /// Every client except this app, read straight from the HAL.
     static func snapshot(reusing known: [AudioObjectID: AudioClient] = [:]) -> [AudioObjectID: AudioClient] {
         let ownPID = getpid()

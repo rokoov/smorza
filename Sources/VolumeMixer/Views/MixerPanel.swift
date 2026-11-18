@@ -24,12 +24,12 @@ struct MixerPanel: View {
             OutputRow(output: model.output)
                 .padding(PanelMetrics.padding)
             Divider()
-            if model.permission == .denied {
-                PermissionNotice()
+            if model.captureState == .blocked || (model.captureState == .checking && model.wasCaptureBlocked) {
+                CaptureNotice(isRetrying: model.captureState == .checking, onRetry: model.retryCaptureCheck)
             }
             apps
-            if model.permission != .denied, !model.isCaptureConfirmed, model.entries.contains(where: \.isAdjusted) {
-                Text("If macOS asks to record system audio, allow it. That is how one app gets quieter.")
+            if model.captureState == .checking, !model.wasCaptureBlocked, model.entries.contains(where: \.isAdjusted) {
+                Label("Waiting for permission to hear other apps. If macOS asks, click Allow.", systemImage: "hourglass")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -253,22 +253,30 @@ struct MuteButton: View {
     }
 }
 
-struct PermissionNotice: View {
+/// Shown when the capture check failed: no app is muted, so every app keeps playing at full volume.
+struct CaptureNotice: View {
+    let isRetrying: Bool
+    let onRetry: () -> Void
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("Audio access is off", systemImage: "exclamationmark.triangle.fill")
+            Label("Volume Mixer can't hear other apps", systemImage: "exclamationmark.triangle.fill")
                 .font(.callout.weight(.semibold))
                 .foregroundStyle(.orange)
-            Text("Turn on Volume Mixer under Privacy & Security → Screen & System Audio Recording → System Audio Recording Only. Until then every app plays at full volume.")
+            Text("Turn on Volume Mixer under Privacy & Security → Screen & System Audio Recording → System Audio Recording Only, then try again. Until then every app plays at full volume.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            Button("Open System Settings") {
-                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
-                    NSWorkspace.shared.open(url)
+            HStack(spacing: 8) {
+                Button("Open System Settings") {
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
+                        NSWorkspace.shared.open(url)
+                    }
                 }
+                .buttonStyle(.borderedProminent)
+                Button(isRetrying ? "Checking…" : "Try Again", action: onRetry)
+                    .disabled(isRetrying)
             }
-            .buttonStyle(.borderedProminent)
             .controlSize(.small)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
