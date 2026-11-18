@@ -22,6 +22,7 @@ final class MixerModel {
     /// The app playing solo, with every other app in the mixer muted.
     private(set) var solo: SoloSession?
     let output = SystemOutput()
+    let volumeKeys = VolumeKeys()
     /// Off only for the `--snapshot` previews, which must never touch anyone's audio.
     @ObservationIgnored var routesAudio = true
 
@@ -31,6 +32,7 @@ final class MixerModel {
     @ObservationIgnored private let resolver = AppResolver()
     @ObservationIgnored private let store = MixerSettingsStore()
     @ObservationIgnored private let hotKeys = HotKeyCenter()
+    @ObservationIgnored private let hud = VolumeHUD()
     @ObservationIgnored private var identities: [AudioObjectID: AppIdentity] = [:]
     @ObservationIgnored private var listedKeys: Set<String> = []
     @ObservationIgnored private var rowSummary: [String] = []
@@ -55,6 +57,10 @@ final class MixerModel {
         monitor.start()
         listenForServiceRestart()
         profilesChanged()
+        volumeKeys.onKey = { [weak self] key, isFine in
+            self?.handleVolumeKey(key, isFine: isFine)
+        }
+        volumeKeys.start()
         wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification,
             object: nil,
@@ -178,6 +184,35 @@ final class MixerModel {
         routes.clearFailures(for: key)
         capture.retry()
         syncRoutes()
+    }
+
+    /// Control + a volume key changes the app in front, not the whole Mac, and shows the overlay.
+    private func handleVolumeKey(_ key: VolumeKeyTap.Key, isFine: Bool) {
+        guard let app = NSWorkspace.shared.frontmostApplication,
+            let appKey = app.bundleIdentifier,
+            appKey != Bundle.main.bundleIdentifier
+        else { return }
+        var setting = store.volume(for: appKey, on: outputDeviceUID(for: appKey))
+        switch key {
+        case .up:
+            // Like the system volume, raising it also unmutes.
+            setting.volume = VolumeCurve.stepped(setting.volume, by: 1, fine: isFine)
+            setting.isMuted = false
+        case .down:
+            setting.volume = VolumeCurve.stepped(setting.volume, by: -1, fine: isFine)
+        case .mute:
+            endSolo(restoring: false)
+            setting.isMuted.toggle()
+        }
+        apply(setting, to: appKey)
+        hud.show(
+            VolumeHUDView(
+                name: app.localizedName ?? appKey,
+                icon: app.icon ?? NSImage(),
+                volume: setting.volume,
+                isMuted: setting.isMuted
+            )
+        )
     }
 
     /// Every app in the mixer with the volume and mute it has now.

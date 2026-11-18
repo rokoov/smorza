@@ -355,5 +355,20 @@ do {
     expect(MixerSettingsStore(defaults: defaults).profiles.isEmpty, "a deleted profile stays deleted")
 }
 
+// Volume keys: sixteen steps with 100% on the twelfth, boost beyond, fine steps that can leave 100%.
+do {
+    var volume = 0.0
+    for _ in 0..<12 {
+        volume = VolumeCurve.stepped(volume, by: 1, fine: false)
+    }
+    expect(nearlyEqual(Float(volume), 1), "twelve presses up from silence land on 100%: \(volume)")
+    expect(nearlyEqual(Float(VolumeCurve.stepped(1, by: 1, fine: false)), 1.25), "one press past 100% is 125%")
+    expect(VolumeCurve.stepped(2, by: 1, fine: false) == 2, "presses stop at 200%")
+    expect(VolumeCurve.stepped(0, by: -1, fine: false) == 0, "presses stop at silence")
+    expect(VolumeCurve.stepped(1, by: 1, fine: true) > 1, "a fine step up leaves 100% instead of snapping back")
+    let fromDrag = VolumeCurve.stepped(0.51, by: 1, fine: false)
+    expect(nearlyEqual(Float(VolumeCurve.position(of: fromDrag)), 7.0 / 16), "a dragged volume steps onto the grid")
+}
+
 print("\(passed) passed, \(failures) failed")
 exit(failures == 0 ? 0 : 1)
