@@ -16,7 +16,7 @@ final class AudioProcessMonitor {
     var onChange: (() -> Void)?
 
     private var listListener: PropertyListener?
-    private var playingListeners: [AudioObjectID: PropertyListener] = [:]
+    private var playingListeners: [AudioObjectID: [PropertyListener]] = [:]
 
     func start() {
         listListener = PropertyListener(.system, kAudioHardwarePropertyProcessObjectList) { [weak self] in
@@ -51,24 +51,32 @@ final class AudioProcessMonitor {
     private func reload() {
         let next = Self.snapshot(reusing: clients)
         for objectID in next.keys where playingListeners[objectID] == nil {
-            playingListeners[objectID] = PropertyListener(objectID, kAudioProcessPropertyIsRunningOutput) { [weak self] in
-                self?.updatePlaying(objectID)
+            // macOS announces IsRunning but changes IsRunningOutput without a notification
+            // (checked on macOS 26.3), so either one triggers a fresh read of every client.
+            playingListeners[objectID] = [kAudioProcessPropertyIsRunning, kAudioProcessPropertyIsRunningOutput].map { selector in
+                PropertyListener(objectID, selector) { [weak self] in
+                    self?.refreshPlaying()
+                }
             }
         }
         let gone = playingListeners.keys.filter { next[$0] == nil }
         for objectID in gone {
-            playingListeners.removeValue(forKey: objectID)?.invalidate()
+            playingListeners.removeValue(forKey: objectID)?.forEach { $0.invalidate() }
         }
         clients = next
         onChange?()
     }
 
-    private func updatePlaying(_ objectID: AudioObjectID) {
-        guard var client = clients[objectID] else { return }
-        let isPlaying = objectID.readBool(kAudioProcessPropertyIsRunningOutput)
-        guard isPlaying != client.isPlaying else { return }
-        client.isPlaying = isPlaying
-        clients[objectID] = client
-        onChange?()
+    /// Re-reads whether each client is playing. Also called on a timer, since a process that is
+    /// already doing input can start output without any notification at all.
+    func refreshPlaying() {
+        var changed = false
+        for (objectID, client) in clients {
+            let isPlaying = objectID.readBool(kAudioProcessPropertyIsRunningOutput)
+            guard isPlaying != client.isPlaying else { continue }
+            clients[objectID]?.isPlaying = isPlaying
+            changed = true
+        }
+        if changed { onChange?() }
     }
 }

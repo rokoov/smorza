@@ -53,6 +53,7 @@ struct MixerPanel: View {
             model.panelDidAppear()
             loginItem.refresh()
         }
+        .onDisappear { model.panelDidDisappear() }
     }
 
     @ViewBuilder

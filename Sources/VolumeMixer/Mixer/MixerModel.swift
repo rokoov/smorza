@@ -50,6 +50,8 @@ final class MixerModel {
     @ObservationIgnored private var retryTask: Task<Void, Never>?
     @ObservationIgnored private var heartbeat: Task<Void, Never>?
     @ObservationIgnored private var napBlocker: NSObjectProtocol?
+    @ObservationIgnored private var isPanelVisible = false
+    @ObservationIgnored private var playingNames: [String] = []
 
     func start() {
         monitor.onChange = { [weak self] in self?.clientsChanged() }
@@ -60,8 +62,16 @@ final class MixerModel {
     }
 
     func panelDidAppear() {
+        isPanelVisible = true
+        monitor.refreshPlaying()
         output.refreshLevels()
         refreshPermission()
+        updateBackgroundWork()
+    }
+
+    func panelDidDisappear() {
+        isPanelVisible = false
+        updateBackgroundWork()
     }
 
     func setVolume(_ volume: Double, for key: String) {
@@ -253,8 +263,10 @@ final class MixerModel {
             napBlocker = nil
         }
 
-        let hasRunningRoute = taps.values.contains { $0.isRunning }
-        if hasRunningRoute, heartbeat == nil {
+        // The heartbeat also catches playing changes macOS never announces: a turned-down app that
+        // starts playing unnoticed would stay muted by its tap.
+        let needsHeartbeat = !taps.isEmpty || isPanelVisible
+        if needsHeartbeat, heartbeat == nil {
             heartbeat = Task { [weak self] in
                 while !Task.isCancelled {
                     try? await Task.sleep(for: Tuning.heartbeat)
@@ -262,13 +274,14 @@ final class MixerModel {
                     self.beat()
                 }
             }
-        } else if !hasRunningRoute {
+        } else if !needsHeartbeat {
             heartbeat?.cancel()
             heartbeat = nil
         }
     }
 
     private func beat() {
+        monitor.refreshPlaying()
         for (objectID, tap) in taps where tap.isRunning {
             let peak = tap.takePeak()
             if peak > 0, receivingAudio.insert(objectID).inserted {
@@ -306,6 +319,11 @@ final class MixerModel {
         }
         if sorted != entries {
             entries = sorted
+        }
+        let playing = sorted.filter(\.isPlaying).map(\.name)
+        if playing != playingNames {
+            playingNames = playing
+            log.notice("Playing: \(playing.isEmpty ? "nothing" : playing.joined(separator: ", "), privacy: .public)")
         }
     }
 
