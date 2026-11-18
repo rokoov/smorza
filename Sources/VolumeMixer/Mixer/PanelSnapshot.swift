@@ -28,25 +28,34 @@ enum PanelSnapshot {
         }
 
         for (name, appearanceName) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
-            guard let appearance = NSAppearance(named: appearanceName),
-                let png = render(MixerPanel(model: model), appearance: appearance)
-            else { continue }
-            let url = URL(fileURLWithPath: directory).appendingPathComponent("panel-\(name).png")
-            try? png.write(to: url)
-            print("Wrote \(url.path)")
+            guard let appearance = NSAppearance(named: appearanceName) else { continue }
+            write(render(framed(MixerPanel(model: model)), appearance: appearance), as: "panel-\(name)", in: directory)
+            if demo {
+                write(render(DemoContent.hud.padding(margin), appearance: appearance), as: "hud-\(name)", in: directory)
+            }
         }
     }
 
-    private static func render(_ panel: MixerPanel, appearance: NSAppearance) -> Data? {
+    private static func framed(_ panel: MixerPanel) -> some View {
         let corners = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        let framed =
+        return
             panel
             .background(Color(nsColor: .windowBackgroundColor))
             .clipShape(corners)
             .overlay(corners.strokeBorder(Color.primary.opacity(0.12)))
             .shadow(color: .black.opacity(0.22), radius: 14, y: 6)
             .padding(margin)
-        let host = NSHostingView(rootView: framed)
+    }
+
+    private static func write(_ png: Data?, as name: String, in directory: String) {
+        guard let png else { return }
+        let url = URL(fileURLWithPath: directory).appendingPathComponent("\(name).png")
+        try? png.write(to: url)
+        print("Wrote \(url.path)")
+    }
+
+    private static func render(_ view: some View, appearance: NSAppearance) -> Data? {
+        let host = NSHostingView(rootView: view)
         host.appearance = appearance
         host.frame = NSRect(origin: .zero, size: host.fittingSize)
         let window = NSWindow(contentRect: host.frame, styleMask: .borderless, backing: .buffered, defer: false)

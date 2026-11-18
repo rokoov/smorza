@@ -132,6 +132,27 @@ struct MixerPanel: View {
                 Button("Quit") { NSApp.terminate(nil) }
                     .keyboardShortcut("q")
             }
+            Toggle(
+                "Control + volume keys change the app in front",
+                isOn: Binding(get: { model.volumeKeys.isEnabled }, set: { model.volumeKeys.setEnabled($0) })
+            )
+            .toggleStyle(.checkbox)
+            if model.volumeKeys.isEnabled, !model.volumeKeys.isTrusted {
+                HStack(spacing: 6) {
+                    Text("Needs Accessibility to catch the keys.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Button("Open Settings") {
+                        if let url = URL(
+                            string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+                        ) {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                    .buttonStyle(.link)
+                    .font(.caption)
+                }
+            }
             if loginItem.needsApproval {
                 Text("Allow Volume Mixer in System Settings → General → Login Items.")
                     .font(.caption)

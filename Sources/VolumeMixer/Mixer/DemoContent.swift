@@ -34,6 +34,17 @@ enum DemoContent {
 
     static let outputVolume = 0.5
 
+    /// The overlay after Control + volume down in Spotify.
+    @MainActor
+    static var hud: VolumeHUDView {
+        VolumeHUDView(
+            name: "Spotify",
+            icon: NSWorkspace.shared.icon(forFile: "/Applications/Spotify.app"),
+            volume: 0.75,
+            isMuted: false
+        )
+    }
+
     @MainActor
     static var entries: [MixerEntry] {
         apps.map { app in

@@ -14,6 +14,8 @@ process taps that macOS 14.4 and later provide.
 - Option-click an app's speaker to play it solo; Option-click again to bring the others back
 - Profiles: save the mix as "Gaming" or "Meeting" (optionally muting every app left out) and switch with
   Control-Option-1 to 9 from anywhere
+- Control + volume keys change the app in front instead of the whole Mac, with a small overlay (needs the
+  Accessibility permission, asked for when you turn it on)
 - Browsers and Electron apps play sound from helper processes; those fold into their app (Chrome, Safari, Discord)
 - Apps at 100% are never touched. Only apps you turn down or mute go through the mixer
 - Universal app for Apple silicon and Intel Macs
@@ -84,7 +86,7 @@ disappears, helpers show under their own names.
 - While an app is routed its sound plays on the device chosen in the mixer (or the system output), even if the
   app picked another device in its own settings
 - Other audio routing tools (Background Music, SoundSource, Loopback) can fight over the same apps
-- macOS may ask for the permission again after an update
+- macOS may ask for the permissions again after an update, since the app is not signed with a Developer ID
 
 ## Uninstall
 
