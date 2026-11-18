@@ -80,6 +80,14 @@ final class MixerModel {
     @ObservationIgnored private var isPanelVisible = false
     @ObservationIgnored private var rowSummary: [String] = []
     @ObservationIgnored private var listedKeys: Set<String> = []
+    @ObservationIgnored private var isDemo = false
+
+    /// Sample rows for README screenshots. The model is never started, so nothing is routed.
+    func showDemo(_ demoEntries: [MixerEntry]) {
+        isDemo = true
+        routesAudio = false
+        entries = demoEntries
+    }
 
     func start() {
         monitor.onChange = { [weak self] in self?.clientsChanged() }
@@ -441,6 +449,7 @@ final class MixerModel {
     }
 
     private func rebuildEntries() {
+        guard !isDemo else { return }
         // Once an app has a row it keeps it until it quits, so pausing it or dragging it back to
         // 100% never pulls the row away in the middle of an adjustment.
         listedKeys.formIntersection(identities.values.map(\.key))

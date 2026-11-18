@@ -27,6 +27,7 @@ final class SystemOutput {
     private(set) var devices: [OutputDevice] = []
 
     @ObservationIgnored var onDeviceChange: (() -> Void)?
+    @ObservationIgnored private var isDemo = false
     @ObservationIgnored private var defaultDeviceListener: PropertyListener?
     @ObservationIgnored private var deviceListListener: PropertyListener?
     @ObservationIgnored private var levelListeners: [PropertyListener] = []
@@ -69,7 +70,20 @@ final class SystemOutput {
         isMuted = muted
     }
 
+    /// Fixed sample data for README screenshots; nothing is read from or written to the HAL after this.
+    func showDemo(name: String, symbolName: String, volume: Double, devices: [OutputDevice]) {
+        isDemo = true
+        deviceID = devices.first?.id ?? .unknown
+        self.name = name
+        self.symbolName = symbolName
+        self.volume = volume
+        canSetVolume = true
+        canMute = true
+        self.devices = devices
+    }
+
     func refreshLevels() {
+        guard !isDemo else { return }
         volume = Double((try? deviceID.read(Self.volumeSelector, scope: Self.outputScope, initial: Float32(0))) ?? 0)
         isMuted = deviceID.readBool(kAudioDevicePropertyMute, scope: Self.outputScope)
     }

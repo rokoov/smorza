@@ -11,7 +11,12 @@ process taps that macOS 14.4 and later provide.
 - Browsers and Electron apps play sound from helper processes; those fold into their app (Chrome, Safari, Discord)
 - Volumes are remembered per app
 - Apps at 100% are never touched. Only apps you turn down or mute go through the mixer
-- Works on Apple silicon and Intel Macs
+- Universal app for Apple silicon and Intel Macs
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshot-dark.png">
+  <img src="docs/screenshot-light.png" width="376" alt="The Volume Mixer panel: output volume on top, a slider and mute button per app, and the output devices">
+</picture>
 
 ## Install
 
@@ -82,3 +87,9 @@ Quit Volume Mixer from its panel, delete it from Applications and, if you like, 
 /Applications/VolumeMixer.app/Contents/MacOS/VolumeMixer --snapshot /tmp   # panel rendered to PNG, routing off
 /usr/bin/log stream --predicate 'subsystem == "com.rokoov.volumemixer"'
 ```
+
+`--snapshot-demo <dir>` renders the panel with sample apps and devices; it made the screenshots above.
+
+## License
+
+MIT, see [LICENSE](LICENSE).
