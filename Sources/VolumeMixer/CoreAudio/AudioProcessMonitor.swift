@@ -1,14 +1,6 @@
 import CoreAudio
 import Foundation
 
-/// A process connected to the audio system.
-struct AudioClient: Equatable {
-    let objectID: AudioObjectID
-    let pid: pid_t
-    let bundleID: String?
-    var isPlaying: Bool
-}
-
 /// Keeps the list of audio clients and whether each one is playing sound right now.
 @MainActor
 final class AudioProcessMonitor {
@@ -38,7 +30,8 @@ final class AudioProcessMonitor {
         let objectIDs = (try? AudioObjectID.system.readObjectIDs(kAudioHardwarePropertyProcessObjectList)) ?? []
         var clients: [AudioObjectID: AudioClient] = [:]
         for objectID in objectIDs {
-            guard let pid = try? objectID.read(kAudioProcessPropertyPID, initial: pid_t(0)), pid > 0, pid != ownPID else { continue }
+            guard let pid = try? objectID.read(kAudioProcessPropertyPID, initial: pid_t(0)), pid > 0, pid != ownPID
+            else { continue }
             let bundleID: String?
             if let existing = known[objectID], existing.pid == pid {
                 bundleID = existing.bundleID
@@ -60,7 +53,8 @@ final class AudioProcessMonitor {
         for objectID in next.keys where playingListeners[objectID] == nil {
             // macOS announces IsRunning but changes IsRunningOutput without a notification
             // (checked on macOS 26.3), so either one triggers a fresh read of every client.
-            playingListeners[objectID] = [kAudioProcessPropertyIsRunning, kAudioProcessPropertyIsRunningOutput].map { selector in
+            playingListeners[objectID] = [kAudioProcessPropertyIsRunning, kAudioProcessPropertyIsRunningOutput].map {
+                selector in
                 PropertyListener(objectID, selector) { [weak self] in
                     self?.refreshPlaying()
                 }
@@ -68,7 +62,9 @@ final class AudioProcessMonitor {
         }
         let gone = playingListeners.keys.filter { next[$0] == nil }
         for objectID in gone {
-            playingListeners.removeValue(forKey: objectID)?.forEach { $0.invalidate() }
+            for listener in playingListeners.removeValue(forKey: objectID) ?? [] {
+                listener.invalidate()
+            }
         }
         clients = next
         onChange?()

@@ -2,13 +2,6 @@ import AppKit
 import Darwin
 import UniformTypeIdentifiers
 
-/// The app a row in the mixer stands for. Every process with the same key shares one slider.
-struct AppIdentity: Equatable {
-    let key: String
-    let name: String
-    let icon: NSImage
-}
-
 /// Names the app behind an audio client. Browsers and WebKit play sound from helper processes
 /// (Safari's comes from com.apple.WebKit.GPU), so a helper is credited to the app macOS holds
 /// responsible for it.
@@ -18,7 +11,8 @@ final class AppResolver {
 
     // Private libsystem call; without it helpers simply show under their own names.
     private static let responsiblePID: ResponsiblePID? = {
-        guard let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "responsibility_get_pid_responsible_for_pid") else { return nil }
+        guard let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "responsibility_get_pid_responsible_for_pid")
+        else { return nil }
         return unsafeBitCast(symbol, to: ResponsiblePID.self)
     }()
 
@@ -64,8 +58,9 @@ final class AppResolver {
         guard let responsiblePID else { return nil }
         let ownerPID = responsiblePID(pid)
         guard ownerPID > 0, ownerPID != pid,
-              let owner = NSRunningApplication(processIdentifier: ownerPID),
-              owner.activationPolicy == .regular else { return nil }
+            let owner = NSRunningApplication(processIdentifier: ownerPID),
+            owner.activationPolicy == .regular
+        else { return nil }
         return owner
     }
 

@@ -2,19 +2,16 @@ import CoreAudio
 import Foundation
 import MixerCore
 
-/// Plays one app's audio at its own volume.
+/// Plays one app's audio at its own volume on one output device.
 ///
-/// A muted process tap captures every process of the app. A private aggregate device holds the
-/// tap as an input and the real output device as its clock and output, and its IO callback copies
-/// the tap into the output at the app's gain. Private taps and aggregates belong to this process,
-/// so if the mixer quits or crashes the system removes them and every app plays normally again.
+/// A muted process tap captures every process of the app. A private aggregate device holds the tap
+/// as an input and the output device as its clock and output, and its IO callback copies the tap
+/// into the output at the app's gain. Private taps and aggregates belong to this process, so if the
+/// mixer quits or crashes the system removes them and every app plays normally again.
 final class ProcessTap {
-    /// Private aggregate devices are visible to the process that made them, so the output list
-    /// recognises its own by this prefix.
-    static let aggregateUIDPrefix = "com.rokoov.volumemixer.route."
-
     /// The app's name, for the log; the app may be gone by the time the route is.
     let label: String
+    let outputDevice: AudioObjectID
     let deviceUID: String
     private(set) var processObjectIDs: [AudioObjectID]
     private(set) var isRunning = false
@@ -29,13 +26,18 @@ final class ProcessTap {
     init(label: String, processObjectIDs: [AudioObjectID], outputDevice: AudioObjectID, gain: Float) throws {
         self.label = label
         self.processObjectIDs = processObjectIDs
+        self.outputDevice = outputDevice
         deviceUID = try outputDevice.readString(kAudioDevicePropertyDeviceUID)
         // An output device with its own inputs (a headset) puts them ahead of the tap's stream.
         deviceInputStreams = outputDevice.streamCount(scope: kAudioObjectPropertyScopeInput)
         renderer = TapRenderer(tapBufferIndex: deviceInputStreams, gain: gain)
         do {
-            try check(AudioHardwareCreateProcessTap(makeDescription(processObjectIDs), &tapID), "Creating the process tap")
-            try createAggregateDevice()
+            try check(AudioHardwareCreateProcessTap(makeDescription(processObjectIDs), &tapID), "Creating the tap")
+            aggregateID = try PrivateAggregateDevice.make(
+                name: "Volume Mixer route",
+                outputDeviceUID: deviceUID,
+                tapUUID: tapUUID
+            )
             try createIOProc()
         } catch {
             invalidate()
@@ -52,8 +54,8 @@ final class ProcessTap {
 
     func takePeak() -> Float { renderer.takePeak() }
 
-    /// Changes which processes the tap hears without stopping the route, for an app that starts
-    /// or loses a helper process.
+    /// Changes which processes the tap hears without stopping the route, for an app that starts or
+    /// loses a helper process.
     func setProcesses(_ objectIDs: [AudioObjectID]) throws {
         var description = makeDescription(objectIDs)
         var address = AudioObjectPropertyAddress(kAudioTapPropertyDescription)
@@ -113,19 +115,6 @@ final class ProcessTap {
         return description
     }
 
-    private func createAggregateDevice() throws {
-        let composition: [String: Any] = [
-            kAudioAggregateDeviceNameKey: "Volume Mixer route",
-            kAudioAggregateDeviceUIDKey: "\(Self.aggregateUIDPrefix)\(UUID().uuidString)",
-            kAudioAggregateDeviceMainSubDeviceKey: deviceUID,
-            kAudioAggregateDeviceIsPrivateKey: true,
-            kAudioAggregateDeviceIsStackedKey: false,
-            kAudioAggregateDeviceSubDeviceListKey: [[kAudioSubDeviceUIDKey: deviceUID]],
-            kAudioAggregateDeviceTapListKey: [[kAudioSubTapUIDKey: tapUUID.uuidString, kAudioSubTapDriftCompensationKey: true]],
-        ]
-        try check(AudioHardwareCreateAggregateDevice(composition as CFDictionary, &aggregateID), "Creating the aggregate device")
-    }
-
     private func createIOProc() throws {
         let renderer = renderer
         // No dispatch queue: the block runs directly on the real-time IO thread.
@@ -134,7 +123,7 @@ final class ProcessTap {
         }
         try check(status, "Creating the IO callback")
         if let ioProcID {
-            ignoreInputStreams(deviceInputStreams, of: aggregateID, procID: ioProcID)
+            PrivateAggregateDevice.ignoreInputStreams(deviceInputStreams, of: aggregateID, procID: ioProcID)
         }
     }
 }

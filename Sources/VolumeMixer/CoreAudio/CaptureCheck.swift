@@ -86,18 +86,12 @@ final class CaptureCheck {
         description.muteBehavior = .unmuted
         try check(AudioHardwareCreateProcessTap(description, &tapID), "Creating the check tap")
 
-        let deviceUID = try outputDevice.readString(kAudioDevicePropertyDeviceUID)
         let deviceInputStreams = outputDevice.streamCount(scope: kAudioObjectPropertyScopeInput)
-        let composition: [String: Any] = [
-            kAudioAggregateDeviceNameKey: "Volume Mixer capture check",
-            kAudioAggregateDeviceUIDKey: "\(ProcessTap.aggregateUIDPrefix)check.\(UUID().uuidString)",
-            kAudioAggregateDeviceMainSubDeviceKey: deviceUID,
-            kAudioAggregateDeviceIsPrivateKey: true,
-            kAudioAggregateDeviceIsStackedKey: false,
-            kAudioAggregateDeviceSubDeviceListKey: [[kAudioSubDeviceUIDKey: deviceUID]],
-            kAudioAggregateDeviceTapListKey: [[kAudioSubTapUIDKey: description.uuid.uuidString, kAudioSubTapDriftCompensationKey: true]],
-        ]
-        try check(AudioHardwareCreateAggregateDevice(composition as CFDictionary, &aggregateID), "Creating the check device")
+        aggregateID = try PrivateAggregateDevice.make(
+            name: "Volume Mixer capture check",
+            outputDeviceUID: try outputDevice.readString(kAudioDevicePropertyDeviceUID),
+            tapUUID: description.uuid
+        )
 
         let heard = heard
         let status = AudioDeviceCreateIOProcIDWithBlock(&listenProcID, aggregateID, nil) { _, input, _, output, _ in
@@ -120,7 +114,7 @@ final class CaptureCheck {
         }
         try check(status, "Creating the check callback")
         if let listenProcID {
-            ignoreInputStreams(deviceInputStreams, of: aggregateID, procID: listenProcID)
+            PrivateAggregateDevice.ignoreInputStreams(deviceInputStreams, of: aggregateID, procID: listenProcID)
         }
         try check(AudioDeviceStart(aggregateID, listenProcID), "Starting the check")
     }
@@ -130,7 +124,14 @@ final class CaptureCheck {
         var pid = getpid()
         var objectID = AudioObjectID.unknown
         var size = UInt32(MemoryLayout<AudioObjectID>.size)
-        let status = AudioObjectGetPropertyData(.system, &address, UInt32(MemoryLayout<pid_t>.size), &pid, &size, &objectID)
+        let status = AudioObjectGetPropertyData(
+            .system,
+            &address,
+            UInt32(MemoryLayout<pid_t>.size),
+            &pid,
+            &size,
+            &objectID
+        )
         try check(status, "Finding this app's audio process")
         guard objectID.isKnown else {
             throw CoreAudioError(operation: "Finding this app's audio process", status: kAudioHardwareBadObjectError)

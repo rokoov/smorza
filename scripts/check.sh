@@ -3,6 +3,19 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+echo "== stray copies"
+# iCloud Drive leaves "File 2.swift" copies in synced folders; a stray copy would redeclare its types.
+copies=$(find . -path ./.build -prune -o -path ./build -prune -o -path ./.git -prune -o -name '* [0-9].*' -print)
+if [[ -n "$copies" ]]; then
+    echo "$copies"
+    echo "Delete these conflict copies first"
+    exit 1
+fi
+
+echo "== format"
+swift format lint --strict --parallel --recursive Package.swift Sources Checks scripts \
+    || { echo "Formatting is off: run scripts/format.sh"; exit 1; }
+
 echo "== build"
 output="$(swift build -c release 2>&1)" || { echo "$output"; exit 1; }
 if grep -q "warning:" <<<"$output"; then
