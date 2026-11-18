@@ -309,5 +309,19 @@ do {
     expect(RowOrder.arrange([Row]()).isEmpty, "no rows stays no rows")
 }
 
+// Solo: everyone else muted, and each app's own mute back afterwards.
+do {
+    let session = SoloSession(key: "spotify", mutesBefore: ["spotify": true, "chrome": false, "discord": true])
+    expect(
+        session.mutes == ["spotify": false, "chrome": true, "discord": true],
+        "solo mutes the others and unmutes itself"
+    )
+    expect(session.mutesBefore["discord"] == true, "an app muted before the solo stays muted after it")
+    expect(
+        SoloSession(key: "a", mutesBefore: [:]).mutes == ["a": false],
+        "a solo with nothing else listed mutes nothing"
+    )
+}
+
 print("\(passed) passed, \(failures) failed")
 exit(failures == 0 ? 0 : 1)

@@ -18,6 +18,8 @@ final class MixerModel {
     }
 
     private(set) var entries: [MixerEntry] = []
+    /// The app playing solo, with every other app in the mixer muted.
+    private(set) var solo: SoloSession?
     let output = SystemOutput()
     /// Off only for the `--snapshot` previews, which must never touch anyone's audio.
     @ObservationIgnored var routesAudio = true
@@ -92,9 +94,29 @@ final class MixerModel {
     }
 
     func toggleMute(for key: String) {
+        // Muting by hand takes over from a solo, whose saved mutes no longer apply.
+        endSolo(restoring: false)
         var setting = store.volume(for: key, on: outputDeviceUID(for: key))
         setting.isMuted.toggle()
         apply(setting, to: key)
+    }
+
+    /// Mutes every other app in the mixer and unmutes this one. Soloing it again, or quitting it,
+    /// puts every other app's mute back as it was.
+    func toggleSolo(for key: String) {
+        guard solo?.key != key else {
+            endSolo(restoring: true)
+            return
+        }
+        endSolo(restoring: true)
+        let session = SoloSession(
+            key: key,
+            mutesBefore: Dictionary(entries.map { ($0.id, $0.isMuted) }, uniquingKeysWith: { first, _ in first })
+        )
+        solo = session
+        let name = entries.first { $0.id == key }?.name ?? key
+        log.notice("Solo: \(name, privacy: .public)")
+        setMutes(session.mutes)
     }
 
     /// Sends the app to `device`, or back to the system output with nil.
@@ -121,6 +143,27 @@ final class MixerModel {
         syncRoutes()
     }
 
+    private func endSolo(restoring: Bool) {
+        guard let session = solo else { return }
+        solo = nil
+        if restoring {
+            setMutes(session.mutesBefore)
+        }
+    }
+
+    /// Sets several apps' mutes on the devices they play on now, then syncs once.
+    private func setMutes(_ mutes: [String: Bool]) {
+        for (key, isMuted) in mutes {
+            let deviceUID = outputDeviceUID(for: key)
+            var setting = store.volume(for: key, on: deviceUID)
+            guard setting.isMuted != isMuted else { continue }
+            setting.isMuted = isMuted
+            store.setVolume(setting, for: key, on: deviceUID)
+            routes.clearFailures(for: key)
+        }
+        syncRoutes()
+    }
+
     private func clientsChanged() {
         let clients = monitor.clients
         identities = clients.mapValues { resolver.identity(for: $0) }
@@ -130,6 +173,11 @@ final class MixerModel {
 
     private func syncRoutes() {
         let apps = currentApps()
+        if let solo, !apps.contains(where: { $0.key == solo.key }) {
+            // The solo app quit; the others get their sound back.
+            endSolo(restoring: true)
+            return
+        }
         // A device an app plays on for the first time gets its own copy of the app's last volume,
         // so a later change on another device leaves this one alone.
         for app in apps where !app.settings.isDefault {
@@ -204,7 +252,8 @@ final class MixerModel {
                 outputDeviceUID: app.settings.outputDeviceUID,
                 outputDeviceName: app.settings.outputDeviceName,
                 outputSymbol: app.outputSymbol,
-                isOutputConnected: app.settings.outputDeviceUID == nil || app.chosenDevice != nil
+                isOutputConnected: app.settings.outputDeviceUID == nil || app.chosenDevice != nil,
+                isSolo: app.key == solo?.key
             )
         }
         let ordered = RowOrder.arrange(rows, keepingPlacesOf: isPanelVisible ? entries.map(\.id) : nil)
