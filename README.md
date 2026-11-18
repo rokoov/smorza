@@ -42,9 +42,13 @@ Needs macOS 14.4 or later and Swift 5.9 or later. The Command Line Tools are eno
 scripts/build.sh            # builds build/VolumeMixer.app for this Mac
 scripts/build.sh run        # builds and launches it
 scripts/build.sh install    # copies it to /Applications and launches it
-scripts/check.sh            # build without warnings, core checks, bundle checks
+scripts/format.sh           # formats the code with swift-format
+scripts/check.sh            # formatting, build without warnings, core checks, bundle checks
 scripts/release.sh          # universal app zipped for a release
 ```
+
+The code follows the formatting of Apple's SwiftNIO (`.swift-format`): `scripts/format.sh` applies it and
+`scripts/check.sh` fails on anything it would change.
 
 ## How it works
 
@@ -62,10 +66,11 @@ disappears, helpers show under their own names.
 
 | Path | What |
 | --- | --- |
-| `Sources/MixerCore` | Real-time renderer, volume curve and saved settings |
-| `Sources/VolumeMixer/CoreAudio` | Audio clients, taps, capture check, output devices |
-| `Sources/VolumeMixer/Mixer` | `MixerModel`, which decides what is routed and when |
-| `Sources/VolumeMixer/Views` | The menu bar panel |
+| `Sources/MixerCore` | Pure logic: real-time renderer, volume curve, saved settings, row order |
+| `Sources/VolumeMixer/CoreAudio` | Audio clients, process taps, the capture check, output devices |
+| `Sources/VolumeMixer/Mixer` | `MixerModel`, `RouteManager` and `CaptureCheckController`: what is routed, when and where |
+| `Sources/VolumeMixer/Views` | The menu bar panel, one view per file |
+| `Sources/VolumeMixer/App` | Entry point, app delegate, login item, logging |
 | `Checks/MixerCoreChecks` | Checks for `MixerCore`, run by `scripts/check.sh` |
 
 ## Known issues

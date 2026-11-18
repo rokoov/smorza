@@ -4,14 +4,6 @@ import CoreAudio
 import Foundation
 import Observation
 
-/// A device sound can be sent to, as the output list shows it.
-struct OutputDevice: Identifiable, Equatable {
-    let id: AudioObjectID
-    let name: String
-    let symbolName: String
-    let isBuiltIn: Bool
-}
-
 /// The default output device: its name, its own volume and mute, the devices it can switch to,
 /// and when it changes.
 @MainActor
@@ -128,7 +120,7 @@ final class SystemOutput {
             deviceID.readBool(kAudioDevicePropertyDeviceCanBeDefaultDevice, scope: outputScope),
             !deviceID.readBool(kAudioDevicePropertyIsHidden),
             let uid = try? deviceID.readString(kAudioDevicePropertyDeviceUID),
-            !uid.hasPrefix(ProcessTap.aggregateUIDPrefix)
+            !uid.hasPrefix(PrivateAggregateDevice.uidPrefix)
         else { return nil }
         let name = (try? deviceID.readString(kAudioObjectPropertyName)) ?? uid
         let transport = (try? deviceID.read(kAudioDevicePropertyTransportType, initial: UInt32(0))) ?? 0

@@ -1,14 +1,6 @@
 import CoreAudio
 import Foundation
 
-/// A process connected to the audio system.
-struct AudioClient: Equatable {
-    let objectID: AudioObjectID
-    let pid: pid_t
-    let bundleID: String?
-    var isPlaying: Bool
-}
-
 /// Keeps the list of audio clients and whether each one is playing sound right now.
 @MainActor
 final class AudioProcessMonitor {
@@ -70,7 +62,9 @@ final class AudioProcessMonitor {
         }
         let gone = playingListeners.keys.filter { next[$0] == nil }
         for objectID in gone {
-            playingListeners.removeValue(forKey: objectID)?.forEach { $0.invalidate() }
+            for listener in playingListeners.removeValue(forKey: objectID) ?? [] {
+                listener.invalidate()
+            }
         }
         clients = next
         onChange?()

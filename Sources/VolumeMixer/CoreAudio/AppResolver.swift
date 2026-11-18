@@ -2,13 +2,6 @@ import AppKit
 import Darwin
 import UniformTypeIdentifiers
 
-/// The app a row in the mixer stands for. Every process with the same key shares one slider.
-struct AppIdentity: Equatable {
-    let key: String
-    let name: String
-    let icon: NSImage
-}
-
 /// Names the app behind an audio client. Browsers and WebKit play sound from helper processes
 /// (Safari's comes from com.apple.WebKit.GPU), so a helper is credited to the app macOS holds
 /// responsible for it.

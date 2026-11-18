@@ -54,7 +54,9 @@ struct TestBuffers {
     }
 
     func release() {
-        storage.forEach { $0.deallocate() }
+        for samples in storage {
+            samples.deallocate()
+        }
         free(list.unsafeMutablePointer)
     }
 }
@@ -166,7 +168,9 @@ do {
     expect(surround.sample(buffer: 0, frame: 0, channel: 3) == 0, "multichannel device: extra channels are silent")
     expect(surround.sample(buffer: 1, frame: 0, channel: 0) == 0, "multichannel device: later streams are silent")
 
-    [input, mono, split, surround].forEach { $0.release() }
+    for buffers in [input, mono, split, surround] {
+        buffers.release()
+    }
 }
 
 // No input at all writes silence instead of leaving stale samples.
@@ -210,6 +214,35 @@ do {
     )
     expect(reloaded["unknown.app"] == AppVolume(), "an unknown app starts at full volume")
     defaults.removePersistentDomain(forName: suiteName)
+}
+
+// Row order: playing apps first, then by name; open panels keep rows in place.
+struct Row: MixerRowItem {
+    let id: String
+    let isPlaying: Bool
+    var name: String { id }
+}
+
+do {
+    let rows = [
+        Row(id: "zoom", isPlaying: false),
+        Row(id: "Spotify", isPlaying: true),
+        Row(id: "chrome", isPlaying: true),
+        Row(id: "Discord", isPlaying: false),
+    ]
+    let arranged = RowOrder.arrange(rows).map(\.id)
+    expect(
+        arranged == ["chrome", "Spotify", "Discord", "zoom"],
+        "playing first, then names ignoring case: \(arranged)"
+    )
+
+    let onScreen = ["Discord", "chrome", "gone"]
+    let held = RowOrder.arrange(rows, keepingPlacesOf: onScreen).map(\.id)
+    expect(
+        held == ["Discord", "chrome", "Spotify", "zoom"],
+        "rows on screen hold their places, new ones follow: \(held)"
+    )
+    expect(RowOrder.arrange([Row]()).isEmpty, "no rows stays no rows")
 }
 
 print("\(passed) passed, \(failures) failed")
