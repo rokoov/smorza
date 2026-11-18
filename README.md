@@ -11,6 +11,9 @@ process taps that macOS 14.4 and later provide.
 - Pick the output device from the same panel, or send one app somewhere else: Spotify on the speakers,
   Discord in the headphones
 - Volumes are remembered per app and per device: 40% on the speakers, 100% in the headphones
+- Option-click an app's speaker to play it solo; Option-click again to bring the others back
+- Profiles: save the mix as "Gaming" or "Meeting" (optionally muting every app left out) and switch with
+  Control-Option-1 to 9 from anywhere
 - Browsers and Electron apps play sound from helper processes; those fold into their app (Chrome, Safari, Discord)
 - Apps at 100% are never touched. Only apps you turn down or mute go through the mixer
 - Universal app for Apple silicon and Intel Macs

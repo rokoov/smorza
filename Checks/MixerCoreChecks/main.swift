@@ -323,5 +323,37 @@ do {
     )
 }
 
+// Profiles: listed apps take the profile's values, others are muted only when the profile says so,
+// and profiles survive a relaunch next to a version 2 save.
+do {
+    let meeting = Profile(name: "Meeting", apps: ["zoom": AppVolume(volume: 1.2)], mutesOtherApps: true)
+    let current = ["zoom": AppVolume(volume: 0.5), "spotify": AppVolume(volume: 0.7)]
+    let changes = meeting.changes(from: current)
+    expect(changes["zoom"] == AppVolume(volume: 1.2), "a listed app takes the profile's volume")
+    expect(changes["spotify"] == AppVolume(volume: 0.7, isMuted: true), "an app left out is muted, its volume kept")
+    var gentle = meeting
+    gentle.mutesOtherApps = false
+    expect(gentle.changes(from: current)["spotify"] == nil, "without muting others, apps left out are untouched")
+    let away = Profile(name: "Away", apps: ["discord": AppVolume(isMuted: true)])
+    expect(away.changes(from: current)["discord"]?.isMuted == true, "a listed app that is not running is still set")
+
+    let suiteName = "MixerCoreChecks.\(UUID().uuidString)"
+    guard let defaults = UserDefaults(suiteName: suiteName) else { fatalError("no defaults suite") }
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    let version2 = #"{"version":2,"apps":{"spotify":{"volumes":{},"lastVolume":{"volume":0.4,"isMuted":false}}}}"#
+    defaults.set(Data(version2.utf8), forKey: "Settings")
+    let store = MixerSettingsStore(defaults: defaults)
+    expect(store.volume(for: "spotify", on: "x").volume == 0.4, "a version 2 save loads into version 3")
+    expect(store.profiles.isEmpty, "a version 2 save has no profiles")
+    store.saveProfile(meeting)
+    var renamed = meeting
+    renamed.name = "Calls"
+    store.saveProfile(renamed)
+    let reloaded = MixerSettingsStore(defaults: defaults)
+    expect(reloaded.profiles == [renamed], "a profile saved again replaces itself and survives a relaunch")
+    reloaded.deleteProfile(id: meeting.id)
+    expect(MixerSettingsStore(defaults: defaults).profiles.isEmpty, "a deleted profile stays deleted")
+}
+
 print("\(passed) passed, \(failures) failed")
 exit(failures == 0 ? 0 : 1)
