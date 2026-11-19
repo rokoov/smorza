@@ -2,8 +2,8 @@ import ApplicationServices
 import Foundation
 import Observation
 
-/// The "Control + volume keys change the app in front" option: remembers whether it is on, asks for
-/// the Accessibility permission the event tap needs, and runs the tap once it is granted.
+/// The "volume keys change the app in front" option: remembers whether it is on, asks for the
+/// Accessibility permission the event tap needs, and runs the tap once it is granted.
 @MainActor
 @Observable
 final class VolumeKeys {
@@ -13,8 +13,9 @@ final class VolumeKeys {
 
     private(set) var isEnabled = UserDefaults.standard.bool(forKey: VolumeKeys.enabledKey)
     private(set) var isTrusted = AXIsProcessTrusted()
-    /// Called on the main thread for every press of a caught key.
-    @ObservationIgnored var onKey: ((_ key: VolumeKeyTap.Key, _ isFine: Bool) -> Void)?
+    /// Called on the main thread for every press and release of a volume key; returns false to
+    /// leave the key to the system.
+    @ObservationIgnored var onKey: ((_ key: VolumeKeyTap.Key, _ isPressed: Bool, _ isFine: Bool) -> Bool)?
 
     @ObservationIgnored private var tap: VolumeKeyTap?
     @ObservationIgnored private var trustPoll: Task<Void, Never>?
@@ -54,8 +55,8 @@ final class VolumeKeys {
 
     private func installTap() {
         guard tap == nil else { return }
-        tap = VolumeKeyTap { [weak self] key, isFine in
-            self?.onKey?(key, isFine)
+        tap = VolumeKeyTap { [weak self] key, isPressed, isFine in
+            self?.onKey?(key, isPressed, isFine) ?? false
         }
         log.notice("Volume keys \(self.tap == nil ? "could not be caught" : "caught", privacy: .public)")
     }

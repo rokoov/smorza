@@ -66,8 +66,8 @@ final class MixerModel {
         monitor.start()
         listenForServiceRestart()
         profilesChanged()
-        volumeKeys.onKey = { [weak self] key, isFine in
-            self?.handleVolumeKey(key, isFine: isFine)
+        volumeKeys.onKey = { [weak self] key, isPressed, isFine in
+            self?.handleVolumeKey(key, isPressed: isPressed, isFine: isFine) ?? false
         }
         volumeKeys.start()
         wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
@@ -196,12 +196,15 @@ final class MixerModel {
         syncRoutes()
     }
 
-    /// Control + a volume key changes the app in front, not the whole Mac, and shows the overlay.
-    private func handleVolumeKey(_ key: VolumeKeyTap.Key, isFine: Bool) {
+    /// A volume key changes the app in front, not the whole Mac, and shows the overlay. With no app
+    /// in front that the mixer could change (this app, or one with no bundle), the system keeps it.
+    private func handleVolumeKey(_ key: VolumeKeyTap.Key, isPressed: Bool, isFine: Bool) -> Bool {
         guard let app = NSWorkspace.shared.frontmostApplication,
             let appKey = app.bundleIdentifier,
             appKey != Bundle.main.bundleIdentifier
-        else { return }
+        else { return false }
+        // The release only has to be kept from the system, like its press.
+        guard isPressed else { return true }
         var setting = store.volume(for: appKey, on: outputDeviceUID(for: appKey))
         setting.volume = volumeScale.clamped(setting.volume)
         switch key {
@@ -225,6 +228,7 @@ final class MixerModel {
                 scale: volumeScale
             )
         )
+        return true
     }
 
     /// Every app in the mixer with the volume and mute it has now.

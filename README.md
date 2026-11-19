@@ -14,8 +14,9 @@ process taps that macOS 14.4 and later provide. Smorza was called Volume Mixer u
 - Volumes are remembered per app and per device: 40% on the speakers, 100% in the headphones
 - Level meters under the sliders of the apps that go through the mixer, while the panel is open
 - Option-click an app's speaker to play it solo; Option-click again to bring the others back
-- Control + volume keys change the app in front instead of the whole Mac, with a small overlay (needs the
-  Accessibility permission, asked for when you turn it on)
+- The volume keys can change the app in front instead of the whole Mac, with a small overlay showing its level;
+  Option + the keys still change the Mac's volume (needs the Accessibility permission, asked for when you turn
+  it on in Settings)
 - Browsers and Electron apps play sound from helper processes; those fold into their app (Chrome, Safari, Discord)
 - Apps at 100% on the default output are never touched. Only apps you turn down, mute or send to another device
   go through the mixer
