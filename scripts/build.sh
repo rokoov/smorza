@@ -3,21 +3,19 @@
 #   scripts/build.sh           build only
 #   scripts/build.sh run       build and launch from build/
 #   scripts/build.sh install   build, copy to /Applications and launch
-# SIGN_IDENTITY picks a signing certificate; without one the app is signed ad hoc.
+# SIGN_IDENTITY picks a signing certificate, used with the hardened runtime; without one the app
+# is signed ad hoc.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 swift build -c release --product VolumeMixer
-BIN="$(swift build -c release --show-bin-path)/VolumeMixer"
+source scripts/bundle.sh
 
 APP="build/VolumeMixer.app"
-rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BIN" "$APP/Contents/MacOS/VolumeMixer"
-cp Resources/Info.plist "$APP/Contents/Info.plist"
-cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
-plutil -lint "$APP/Contents/Info.plist" >/dev/null
-codesign --force --sign "${SIGN_IDENTITY:--}" --identifier com.rokoov.volumemixer "$APP"
+products=$(swift build -c release --show-bin-path)
+staged=$(make_app "$products/VolumeMixer" "$products/Sparkle.framework")
+sign_app "$staged"
+deliver_app "$staged" "$APP"
 echo "Built $APP"
 
 case "${1:-}" in

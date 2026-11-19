@@ -15,6 +15,10 @@ final class MixerModel {
         static let heartbeat: Duration = .seconds(1)
         /// Pause after waking from sleep, while devices come back, before routes are rebuilt.
         static let wakeRebuild: Duration = .seconds(2)
+        /// How often the level meters read the routes while the panel is open.
+        static let meterUpdate: Duration = .milliseconds(50)
+        /// The same with Reduce Motion on: a calm reading twice a second instead of a moving bar.
+        static let calmMeterUpdate: Duration = .milliseconds(500)
     }
 
     private(set) var entries: [MixerEntry] = []
@@ -22,7 +26,10 @@ final class MixerModel {
     /// The app playing solo, with every other app in the mixer muted.
     private(set) var solo: SoloSession?
     let output = SystemOutput()
+    /// How far the sliders go: to 100%, or to 200% where boost is on.
+    let volumeScale = ProFeatures.volumeScale
     let volumeKeys = VolumeKeys()
+    let meters = MeterLevels()
     /// Off only for the `--snapshot` previews, which must never touch anyone's audio.
     @ObservationIgnored var routesAudio = true
 
@@ -39,6 +46,7 @@ final class MixerModel {
     @ObservationIgnored private var isPanelVisible = false
     @ObservationIgnored private var isDemo = false
     @ObservationIgnored private var heartbeat: Task<Void, Never>?
+    @ObservationIgnored private var meterLoop: Task<Void, Never>?
     @ObservationIgnored private var napBlocker: NSObjectProtocol?
     @ObservationIgnored private var restartListener: PropertyListener?
     @ObservationIgnored private var wakeObserver: NSObjectProtocol?
@@ -50,6 +58,7 @@ final class MixerModel {
     func start() {
         monitor.onChange = { [weak self] in self?.clientsChanged() }
         output.onDeviceChange = { [weak self] in self?.outputDeviceChanged() }
+        output.onDevicesChange = { [weak self] in self?.outputDevicesChanged() }
         capture.onFinish = { [weak self] in self?.syncRoutes() }
         routes.onRetry = { [weak self] in self?.syncRoutes() }
         routes.onRoutesChanged = { [weak self] in self?.updateBackgroundWork() }
@@ -91,6 +100,7 @@ final class MixerModel {
     func panelDidDisappear() {
         guard isPanelVisible else { return }
         isPanelVisible = false
+        meters.clear()
         rebuildEntries(from: currentApps())
         updateBackgroundWork()
         log.notice("Panel closed")
@@ -98,7 +108,7 @@ final class MixerModel {
 
     func setVolume(_ volume: Double, for key: String) {
         var setting = store.volume(for: key, on: outputDeviceUID(for: key))
-        setting.volume = min(max(volume, 0), VolumeCurve.maximum)
+        setting.volume = volumeScale.clamped(volume)
         apply(setting, to: key)
     }
 
@@ -193,13 +203,14 @@ final class MixerModel {
             appKey != Bundle.main.bundleIdentifier
         else { return }
         var setting = store.volume(for: appKey, on: outputDeviceUID(for: appKey))
+        setting.volume = volumeScale.clamped(setting.volume)
         switch key {
         case .up:
             // Like the system volume, raising it also unmutes.
-            setting.volume = VolumeCurve.stepped(setting.volume, by: 1, fine: isFine)
+            setting.volume = volumeScale.stepped(setting.volume, by: 1, fine: isFine)
             setting.isMuted = false
         case .down:
-            setting.volume = VolumeCurve.stepped(setting.volume, by: -1, fine: isFine)
+            setting.volume = volumeScale.stepped(setting.volume, by: -1, fine: isFine)
         case .mute:
             endSolo(restoring: false)
             setting.isMuted.toggle()
@@ -210,7 +221,8 @@ final class MixerModel {
                 name: app.localizedName ?? appKey,
                 icon: app.icon ?? NSImage(),
                 volume: setting.volume,
-                isMuted: setting.isMuted
+                isMuted: setting.isMuted,
+                scale: volumeScale
             )
         )
     }
@@ -223,10 +235,15 @@ final class MixerModel {
         )
     }
 
-    /// The first nine profiles answer to Control-Option-1 to 9.
+    /// The first nine profiles answer to Control-Option-1 to 9. Without Pro the saved profiles stay
+    /// untouched but hidden, with no shortcuts.
     private func profilesChanged() {
-        profiles = store.profiles
         hotKeys.unregisterAll()
+        guard ProFeatures.isProfilesEnabled else {
+            profiles = []
+            return
+        }
+        profiles = store.profiles
         var shortcuts = 0
         for (index, profile) in profiles.prefix(9).enumerated() {
             let isRegistered = hotKeys.registerControlOption(number: index + 1) { [weak self] in
@@ -308,26 +325,37 @@ final class MixerModel {
             clientsByKey[identity.key, default: []].append(client)
             identityByKey[identity.key] = identity
         }
+        let connected = Set(output.devices.map(\.uid))
         return identityByKey.map { key, identity in
             let settings = store.settings(for: key)
-            let chosen = settings.outputDeviceUID.flatMap(output.device(withUID:))
-            let device = chosen ?? output.device(withUID: output.deviceUID)
+            let deviceUID = settings.outputDeviceUID(systemOutputUID: output.deviceUID, connectedUIDs: connected)
+            let device = output.device(withUID: deviceUID)
+            var volume = settings.volume(on: deviceUID)
+            volume.volume = volumeScale.clamped(volume.volume)
             return AppAudio(
                 identity: identity,
                 clients: clientsByKey[key, default: []],
                 settings: settings,
-                chosenDevice: chosen,
-                outputDeviceID: chosen?.id ?? output.deviceID,
-                outputDeviceUID: chosen?.uid ?? output.deviceUID,
+                volume: volume,
+                chosenDevice: settings.outputDeviceUID.flatMap(output.device(withUID:)),
+                outputDeviceID: device?.id ?? output.deviceID,
+                outputDeviceUID: deviceUID,
                 outputSymbol: device?.symbolName ?? output.symbolName,
-                isRedirected: chosen.map { $0.id != output.deviceID } ?? false
+                needsRoute: settings.needsRoute(
+                    systemOutputUID: output.deviceUID,
+                    connectedUIDs: connected,
+                    scale: volumeScale
+                )
             )
         }
     }
 
     /// Where the app plays now: its picked device while connected, otherwise the system output.
     private func outputDeviceUID(for key: String) -> String {
-        store.settings(for: key).outputDeviceUID.flatMap(output.device(withUID:))?.uid ?? output.deviceUID
+        store.settings(for: key).outputDeviceUID(
+            systemOutputUID: output.deviceUID,
+            connectedUIDs: Set(output.devices.map(\.uid))
+        )
     }
 
     private func rebuildEntries(from apps: [AppAudio]) {
@@ -370,6 +398,13 @@ final class MixerModel {
     private func outputDeviceChanged() {
         capture.outputDeviceChanged(to: output.deviceID)
         // Routes still on the old device are replaced by the next sync.
+        syncRoutes()
+    }
+
+    /// A device came or went: apps sent to it move there or fall back to the system output. Only
+    /// routes whose device changed are rebuilt, each new one starting before the old one goes.
+    private func outputDevicesChanged() {
+        log.notice("Output devices changed: \(self.output.devices.count) connected")
         syncRoutes()
     }
 
@@ -434,10 +469,30 @@ final class MixerModel {
             heartbeat?.cancel()
             heartbeat = nil
         }
+
+        // Meters only matter while someone looks at them, and only routes have levels to show.
+        let needsMeters = isPanelVisible && !routes.isEmpty
+        if needsMeters, meterLoop == nil {
+            meterLoop = Task { [weak self] in
+                while !Task.isCancelled {
+                    let isCalm = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+                    try? await Task.sleep(for: isCalm ? Timing.calmMeterUpdate : Timing.meterUpdate)
+                    guard !Task.isCancelled, let self else { return }
+                    meters.update(with: routes.sampleLevels(), isSmoothed: !isCalm)
+                }
+            }
+        } else if !needsMeters {
+            meterLoop?.cancel()
+            meterLoop = nil
+            meters.clear()
+        }
     }
 
     private func beat() {
         monitor.refreshPlaying()
-        routes.reportIncomingAudio()
+        // While the panel is open the meters read the routes; otherwise this only logs first audio.
+        if meterLoop == nil {
+            _ = routes.sampleLevels()
+        }
     }
 }

@@ -229,13 +229,19 @@ expect(VolumeCurve.percent(0.996) == 100, "percent rounds to the label the user 
 expect(VolumeCurve.percent(1.5) == 150, "boost reads above 100%")
 
 // Slider positions: 100% sits three quarters along, boost takes the last quarter.
-expect(VolumeCurve.position(of: 1) == VolumeCurve.unityPosition, "100% sits on the mark")
-expect(VolumeCurve.position(of: 2) == 1, "200% is the end of the slider")
-expect(nearlyEqual(Float(VolumeCurve.position(of: 0.5)), 0.375), "50% is half way to the mark")
-expect(VolumeCurve.volume(atPosition: VolumeCurve.unityPosition + 0.01) == 1, "a drag next to the mark snaps onto 100%")
-expect(nearlyEqual(Float(VolumeCurve.volume(atPosition: 0.875)), 1.5), "half way through the boost quarter is 150%")
+expect(VolumeScale.boosted.position(of: 1) == VolumeScale.boosted.unityPosition, "100% sits on the mark")
+expect(VolumeScale.boosted.position(of: 2) == 1, "200% is the end of the slider")
+expect(nearlyEqual(Float(VolumeScale.boosted.position(of: 0.5)), 0.375), "50% is half way to the mark")
+expect(
+    VolumeScale.boosted.volume(atPosition: VolumeScale.boosted.unityPosition + 0.01) == 1,
+    "a drag next to the mark snaps onto 100%"
+)
+expect(
+    nearlyEqual(Float(VolumeScale.boosted.volume(atPosition: 0.875)), 1.5),
+    "half way through the boost quarter is 150%"
+)
 for volume in [0.0, 0.2, 0.6, 1.3, 1.8, 2.0] {
-    let roundTrip = VolumeCurve.volume(atPosition: VolumeCurve.position(of: volume))
+    let roundTrip = VolumeScale.boosted.volume(atPosition: VolumeScale.boosted.position(of: volume))
     expect(nearlyEqual(Float(roundTrip), Float(volume)), "position and volume convert both ways for \(volume)")
 }
 expect(AppVolume(volume: 1.4).isBoosted, "above 100% is boost")
@@ -359,15 +365,76 @@ do {
 do {
     var volume = 0.0
     for _ in 0..<12 {
-        volume = VolumeCurve.stepped(volume, by: 1, fine: false)
+        volume = VolumeScale.boosted.stepped(volume, by: 1, fine: false)
     }
     expect(nearlyEqual(Float(volume), 1), "twelve presses up from silence land on 100%: \(volume)")
-    expect(nearlyEqual(Float(VolumeCurve.stepped(1, by: 1, fine: false)), 1.25), "one press past 100% is 125%")
-    expect(VolumeCurve.stepped(2, by: 1, fine: false) == 2, "presses stop at 200%")
-    expect(VolumeCurve.stepped(0, by: -1, fine: false) == 0, "presses stop at silence")
-    expect(VolumeCurve.stepped(1, by: 1, fine: true) > 1, "a fine step up leaves 100% instead of snapping back")
-    let fromDrag = VolumeCurve.stepped(0.51, by: 1, fine: false)
-    expect(nearlyEqual(Float(VolumeCurve.position(of: fromDrag)), 7.0 / 16), "a dragged volume steps onto the grid")
+    expect(nearlyEqual(Float(VolumeScale.boosted.stepped(1, by: 1, fine: false)), 1.25), "one press past 100% is 125%")
+    expect(VolumeScale.boosted.stepped(2, by: 1, fine: false) == 2, "presses stop at 200%")
+    expect(VolumeScale.boosted.stepped(0, by: -1, fine: false) == 0, "presses stop at silence")
+    expect(VolumeScale.boosted.stepped(1, by: 1, fine: true) > 1, "a fine step up leaves 100% instead of snapping back")
+    let fromDrag = VolumeScale.boosted.stepped(0.51, by: 1, fine: false)
+    expect(
+        nearlyEqual(Float(VolumeScale.boosted.position(of: fromDrag)), 7.0 / 16),
+        "a dragged volume steps onto the grid"
+    )
+}
+
+// The free scale ends at 100%: the slider is the volume, sixteen key steps reach the top.
+do {
+    let free = VolumeScale.standard
+    expect(!free.allowsBoost && VolumeScale.boosted.allowsBoost, "only the boosted scale goes past 100%")
+    expect(free.position(of: 0.4) == 0.4 && free.volume(atPosition: 0.4) == 0.4, "on the free scale position is volume")
+    expect(free.clamped(1.6) == 1, "a boost saved under Pro plays at 100% on the free scale")
+    expect(free.volume(atPosition: 0.99) == 1, "a drag near the end lands on 100%")
+    var volume = 0.0
+    for _ in 0..<16 {
+        volume = free.stepped(volume, by: 1, fine: false)
+    }
+    expect(nearlyEqual(Float(volume), 1), "sixteen presses up reach 100%: \(volume)")
+    expect(free.stepped(1, by: 1, fine: false) == 1, "presses stop at 100% without boost")
+}
+
+// Per-app output: older saves decode, and the routing rule covers volume, mute and device.
+do {
+    let decoder = JSONDecoder()
+    let beforeDevices = try decoder.decode(
+        AppSettings.self,
+        from: Data(#"{"volumes":{"speakers":{"volume":0.4,"isMuted":false}}}"#.utf8)
+    )
+    expect(beforeDevices.outputDeviceUID == nil, "a save from before per-app output follows the system output")
+    expect(beforeDevices.volume(on: "speakers").volume == 0.4, "its volumes still load")
+    let bare = try decoder.decode(AppSettings.self, from: Data(#"{"lastVolume":{"volume":0.7,"isMuted":true}}"#.utf8))
+    expect(bare.volumes.isEmpty && bare.lastVolume?.isMuted == true, "a save without per-device volumes loads too")
+
+    let connected: Set = ["speakers", "airpods"]
+    func routes(_ settings: AppSettings, system: String = "speakers", on devices: Set<String> = connected) -> Bool {
+        settings.needsRoute(systemOutputUID: system, connectedUIDs: devices, scale: .standard)
+    }
+    expect(!routes(AppSettings()), "an untouched app plays directly")
+    expect(routes(AppSettings(lastVolume: AppVolume(volume: 0.5))), "a turned-down app is routed")
+    expect(routes(AppSettings(lastVolume: AppVolume(isMuted: true))), "a muted app is routed")
+    let sent = AppSettings(outputDeviceUID: "airpods", outputDeviceName: "AirPods Pro")
+    expect(routes(sent), "an app sent to another device is routed even at 100%")
+    expect(!routes(sent, system: "airpods"), "sent to the system output itself, it plays untouched")
+    expect(!routes(sent, on: ["speakers"]), "with its device unplugged it falls back and plays untouched")
+    expect(
+        sent.outputDeviceUID(systemOutputUID: "speakers", connectedUIDs: ["speakers"]) == "speakers",
+        "an unplugged device sends the app to the system output"
+    )
+    expect(!routes(AppSettings(lastVolume: AppVolume(volume: 1.5))), "a Pro boost plays untouched on the free scale")
+    expect(!sent.isDefault, "a chosen device is worth keeping even at 100%")
+}
+
+// Level meters: a decibel bar that rises at once and falls back gently.
+do {
+    expect(LevelMeter.fraction(ofPeak: 1) == 1, "full scale fills the bar")
+    expect(LevelMeter.fraction(ofPeak: 2) == 1, "a peak over full scale still fills it, no more")
+    expect(LevelMeter.fraction(ofPeak: 0) == 0, "silence is an empty bar")
+    expect(LevelMeter.fraction(ofPeak: 0.0005) == 0, "under -60 dB is empty")
+    expect(nearlyEqual(LevelMeter.fraction(ofPeak: 0.031_622_8), 0.5), "-30 dB is half the bar")
+    expect(LevelMeter.next(from: 0.2, toward: 0.9) == 0.9, "a louder peak shows at once")
+    expect(nearlyEqual(LevelMeter.next(from: 0.9, toward: 0), 0.84), "a bar falls one step per update")
+    expect(LevelMeter.next(from: 0.03, toward: 0) == 0, "and stops at the new level, never below it")
 }
 
 print("\(passed) passed, \(failures) failed")

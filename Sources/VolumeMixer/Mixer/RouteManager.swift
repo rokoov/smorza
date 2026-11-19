@@ -115,10 +115,14 @@ final class RouteManager {
         failedAttempts[key] = nil
     }
 
-    /// Logs the first real audio each running route delivers, which proves the route works.
-    func reportIncomingAudio() {
+    /// Reads how loud each running route has been since the last call, as it leaves the route
+    /// (the app's peak times its gain), and logs the first real audio each one delivers, which proves
+    /// the route works. Reading resets the peaks, so one caller samples at a time.
+    func sampleLevels() -> [String: Float] {
+        var levels: [String: Float] = [:]
         for (key, route) in routes where route.isRunning {
             let peak = route.takePeak()
+            levels[key] = min(peak * route.gain, 1)
             if peak > 0, receivingAudio.insert(key).inserted {
                 let label = route.label
                 log.notice(
@@ -126,6 +130,7 @@ final class RouteManager {
                 )
             }
         }
+        return levels
     }
 
     private func route(for request: Request, retiring retired: inout [ProcessTap]) -> ProcessTap? {

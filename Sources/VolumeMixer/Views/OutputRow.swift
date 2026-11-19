@@ -17,7 +17,8 @@ struct OutputRow: View {
             onChange: { output.setVolume($0) },
             onToggleMute: { output.setMuted(!output.isMuted) },
             // Holds the column the app rows use for their output menu, so every slider lines up.
-            accessory: Color.clear.frame(width: PanelMetrics.hitTarget, height: PanelMetrics.hitTarget)
+            accessory: Color.clear.frame(width: PanelMetrics.hitTarget, height: PanelMetrics.hitTarget),
+            meter: EmptyView()
         ) {
             // A quiet plate: the apps below are what the panel is for.
             Image(systemName: output.symbolName)

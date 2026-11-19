@@ -7,17 +7,18 @@ Windows. Nothing to install besides the app: no audio driver, no kernel extensio
 process taps that macOS 14.4 and later provide.
 
 - A slider and a mute button for each app that plays sound, and the output device's own volume on top
-- Boost quiet apps up to 200%; a limiter keeps them from clipping
-- Pick the output device from the same panel, or send one app somewhere else: Spotify on the speakers,
-  Discord in the headphones
+- An output device per app: Spotify on the speakers, Discord in the AirPods. Point at an app's row and pick the
+  device from the button that appears next to its slider, or right-click the row. If the device goes away the app
+  plays on the default output, and it moves back when the device returns
 - Volumes are remembered per app and per device: 40% on the speakers, 100% in the headphones
+- Level meters under the sliders of the apps that go through the mixer, while the panel is open
 - Option-click an app's speaker to play it solo; Option-click again to bring the others back
-- Profiles: save the mix as "Gaming" or "Meeting" (optionally muting every app left out) and switch with
-  Control-Option-1 to 9 from anywhere
 - Control + volume keys change the app in front instead of the whole Mac, with a small overlay (needs the
   Accessibility permission, asked for when you turn it on)
 - Browsers and Electron apps play sound from helper processes; those fold into their app (Chrome, Safari, Discord)
-- Apps at 100% are never touched. Only apps you turn down or mute go through the mixer
+- Apps at 100% on the default output are never touched. Only apps you turn down, mute or send to another device
+  go through the mixer
+- Updates itself: checks once a day and asks before installing
 - Universal app for Apple silicon and Intel Macs
 
 <picture>
@@ -27,15 +28,25 @@ process taps that macOS 14.4 and later provide.
 
 ## Install
 
+Needs macOS 14.4 Sonoma or later.
+
 1. Download `VolumeMixer-<version>.zip` from [Releases](../../releases), unzip it and move **VolumeMixer** to
    Applications.
-2. Open it. macOS says it cannot check the app for malware, because Volume Mixer is not signed with a paid Apple
-   Developer ID. Click **Done**, then open **System Settings → Privacy & Security**, scroll down and click
-   **Open Anyway** next to Volume Mixer.
-   If you prefer the terminal: `xattr -dr com.apple.quarantine /Applications/VolumeMixer.app`
-3. Click the sliders icon in the menu bar. The first time you turn an app down, macOS asks to let Volume Mixer
-   record system audio. Click **Allow**: that is how an app's sound reaches the mixer. Nothing is recorded or
-   saved, and the app makes no network connections.
+2. Open it and click the sliders icon in the menu bar.
+3. The first time you turn an app down, macOS asks to let Volume Mixer record system audio. Click **Allow**: that
+   is how an app's sound reaches the mixer. Nothing is recorded or saved. The only network traffic is the daily
+   update check, which reads the release feed on GitHub.
+
+From 0.2.0 on the app updates itself. A copy of 0.1.0 has to be replaced by hand once.
+
+<details>
+<summary>macOS says it cannot check the app for malware</summary>
+
+That copy is not notarized by Apple: releases before 0.2.0 and builds you make yourself are signed ad hoc. Click
+**Done**, then open **System Settings → Privacy & Security**, scroll down and click **Open Anyway** next to
+Volume Mixer. If you prefer the terminal: `xattr -dr com.apple.quarantine /Applications/VolumeMixer.app`
+
+</details>
 
 If you clicked Don't Allow, turn Volume Mixer on under **System Settings → Privacy & Security → Screen & System
 Audio Recording → System Audio Recording Only** and press **Try Again** in the panel. Until then every app plays
@@ -44,6 +55,7 @@ at full volume.
 ## Build from source
 
 Needs macOS 14.4 or later and Swift 5.9 or later. The Command Line Tools are enough (`xcode-select --install`).
+The first build fetches [Sparkle](https://sparkle-project.org) through SwiftPM.
 
 ```sh
 scripts/build.sh            # builds build/VolumeMixer.app for this Mac
@@ -52,10 +64,12 @@ scripts/build.sh install    # copies it to /Applications and launches it
 scripts/format.sh           # formats the code with swift-format
 scripts/check.sh            # formatting, build without warnings, core checks, bundle checks
 scripts/release.sh          # universal app zipped for a release
+scripts/appcast.sh <zip>    # signs a release zip and adds it to the update feed
 ```
 
 The code follows the formatting of Apple's SwiftNIO (`.swift-format`): `scripts/format.sh` applies it and
-`scripts/check.sh` fails on anything it would change.
+`scripts/check.sh` fails on anything it would change. Signing, notarizing and publishing a release is described in
+[docs/RELEASING.md](docs/RELEASING.md).
 
 ## How it works
 
@@ -77,16 +91,33 @@ disappears, helpers show under their own names.
 | `Sources/VolumeMixer/CoreAudio` | Audio clients, process taps, the capture check, output devices |
 | `Sources/VolumeMixer/Mixer` | `MixerModel`, `RouteManager` and `CaptureCheckController`: what is routed, when and where |
 | `Sources/VolumeMixer/Views` | The menu bar panel, one view per file |
-| `Sources/VolumeMixer/App` | Entry point, app delegate, login item, logging |
+| `Sources/VolumeMixer/App` | Entry point, app delegate, login item, updates, logging |
 | `Checks/MixerCoreChecks` | Checks for `MixerCore`, run by `scripts/check.sh` |
 
 ## Known issues
 
 - A turned-down app that was idle starts a few milliseconds late when it plays again
-- While an app is routed its sound plays on the device chosen in the mixer (or the system output), even if the
-  app picked another device in its own settings
+- An app sent to a device in the mixer plays there even if the app picked another device in its own settings;
+  one left on the system default but turned down follows the system default the same way
+- An aggregate device that includes a microphone (made in Audio MIDI Setup) does not work as an output yet: a
+  turned-down app that plays there stays silent. Pick the real device instead
 - Other audio routing tools (Background Music, SoundSource, Loopback) can fight over the same apps
-- macOS may ask for the permissions again after an update, since the app is not signed with a Developer ID
+- Builds you make yourself are signed ad hoc, so macOS may ask for the permissions again after each build
+
+## Roadmap
+
+The mixer stays free. Next for everyone: scroll over a row to change its volume, pinned apps, mute all, an output
+priority list and a small settings window.
+
+Pro, coming soon, a one-time unlock for automation:
+
+- Call ducking: other apps turn down while you are in a call
+- Global microphone mute with a menu bar indicator
+- Profiles: save a mix and switch by shortcut, when a device connects or when an app launches
+- Boost quiet apps up to 200%, with a limiter so nothing clips
+- Night mode: a gentle compressor on every app for late-night listening
+- A command palette: type "spotify 30" or "discord to airpods"
+- Shortcuts actions and a URL scheme for scripts
 
 ## Uninstall
 

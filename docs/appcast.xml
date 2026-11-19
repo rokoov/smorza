@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>Volume Mixer</title>
+    <link>https://rokoov.github.io/volume-mixer/appcast.xml</link>
+    <description>Updates for Volume Mixer</description>
+    <language>en</language>
+    <!-- scripts/appcast.sh adds each release below this line, newest first -->
+  </channel>
+</rss>

@@ -20,6 +20,8 @@ final class SystemOutput {
     private(set) var devices: [OutputDevice] = []
 
     @ObservationIgnored var onDeviceChange: (() -> Void)?
+    /// Called when a device is plugged in or removed, so apps sent to it can move.
+    @ObservationIgnored var onDevicesChange: (() -> Void)?
     @ObservationIgnored private var isDemo = false
     @ObservationIgnored private var defaultDeviceListener: PropertyListener?
     @ObservationIgnored private var deviceListListener: PropertyListener?
@@ -115,9 +117,9 @@ final class SystemOutput {
             if first.isBuiltIn != second.isBuiltIn { return first.isBuiltIn }
             return first.name.localizedCaseInsensitiveCompare(second.name) == .orderedAscending
         }
-        if sorted != devices {
-            devices = sorted
-        }
+        guard sorted != devices else { return }
+        devices = sorted
+        onDevicesChange?()
     }
 
     /// The devices macOS itself would offer as an output: no hidden ones, none that cannot be the

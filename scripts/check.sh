@@ -30,8 +30,10 @@ echo "== core checks"
 echo "== app bundle"
 scripts/build.sh >/dev/null
 plist="build/VolumeMixer.app/Contents/Info.plist"
-for key in NSAudioCaptureUsageDescription LSUIElement CFBundleIdentifier; do
+for key in NSAudioCaptureUsageDescription LSUIElement CFBundleIdentifier SUFeedURL SUPublicEDKey; do
     /usr/libexec/PlistBuddy -c "Print :$key" "$plist" >/dev/null || { echo "Info.plist is missing $key"; exit 1; }
 done
-codesign --verify build/VolumeMixer.app
+[[ -d build/VolumeMixer.app/Contents/Frameworks/Sparkle.framework ]] || { echo "Sparkle.framework is missing"; exit 1; }
+codesign --verify --deep --strict build/VolumeMixer.app
+xmllint --noout docs/appcast.xml
 echo "All checks passed"

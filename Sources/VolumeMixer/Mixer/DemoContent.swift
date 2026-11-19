@@ -16,7 +16,7 @@ enum DemoContent {
     static let apps = [
         App(name: "Google Chrome", path: "/Applications/Google Chrome.app", isPlaying: true),
         App(name: "Spotify", path: "/Applications/Spotify.app", volume: 0.6, isPlaying: true),
-        App(name: "Discord", path: "/Applications/Discord.app", volume: 1.4, outputDeviceUID: "demo.airpods"),
+        App(name: "Discord", path: "/Applications/Discord.app", volume: 0.45, outputDeviceUID: "demo.airpods"),
         App(name: "Music", path: "/System/Applications/Music.app", volume: 0.8, isMuted: true),
     ]
 
@@ -34,6 +34,9 @@ enum DemoContent {
 
     static let outputVolume = 0.5
 
+    /// Live levels of the routed demo apps (Spotify and Discord are turned down, so they have routes).
+    static let meterBars: [String: Float] = ["Spotify": 0.72, "Discord": 0.45]
+
     /// The overlay after Control + volume down in Spotify.
     @MainActor
     static var hud: VolumeHUDView {
@@ -41,7 +44,8 @@ enum DemoContent {
             name: "Spotify",
             icon: NSWorkspace.shared.icon(forFile: "/Applications/Spotify.app"),
             volume: 0.75,
-            isMuted: false
+            isMuted: false,
+            scale: ProFeatures.volumeScale
         )
     }
 

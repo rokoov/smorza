@@ -4,20 +4,23 @@ import SwiftUI
 /// An app's row. A dimmed, grey icon means the app is quiet right now; an orange level means boost.
 struct AppRow: View {
     let entry: MixerEntry
+    let scale: VolumeScale
+    let meters: MeterLevels
     let devices: [OutputDevice]
     let systemOutputName: String
     let onVolume: (Double) -> Void
     let onToggleMute: () -> Void
     let onSolo: () -> Void
     let onChooseOutput: (OutputDevice?) -> Void
+    @State private var isHovered = false
 
     var body: some View {
         MixerRow(
             title: entry.name,
             level: level,
-            position: VolumeCurve.position(of: entry.volume),
+            position: scale.position(of: entry.volume),
             volume: entry.volume,
-            unityMark: VolumeCurve.unityPosition,
+            unityMark: scale.allowsBoost ? scale.unityPosition : nil,
             levelStyle: levelStyle,
             isMuted: entry.isMuted,
             isEnabled: true,
@@ -28,8 +31,10 @@ struct AppRow: View {
                 entry: entry,
                 devices: devices,
                 systemOutputName: systemOutputName,
+                isRevealed: isHovered,
                 onChoose: onChooseOutput
-            )
+            ),
+            meter: LevelMeterBar(meters: meters, key: entry.id)
         ) {
             Image(nsImage: entry.icon)
                 .resizable()
@@ -38,9 +43,19 @@ struct AppRow: View {
                 .opacity(entry.isPlaying ? 1 : 0.6)
                 .help(entry.isPlaying ? "Playing" : "Quiet right now")
         }
+        .onHover { isHovered = $0 }
         .contextMenu {
             Button(entry.isSolo ? "End Solo" : "Play Solo", action: onSolo)
             Button(entry.isMuted ? "Unmute" : "Mute", action: onToggleMute)
+            Divider()
+            Menu("Output") {
+                AppOutputChoices(
+                    entry: entry,
+                    devices: devices,
+                    systemOutputName: systemOutputName,
+                    onChoose: onChooseOutput
+                )
+            }
         }
     }
 
@@ -57,6 +72,6 @@ struct AppRow: View {
     }
 
     private func setPosition(_ position: Double) {
-        onVolume(VolumeCurve.volume(atPosition: position))
+        onVolume(scale.volume(atPosition: position))
     }
 }

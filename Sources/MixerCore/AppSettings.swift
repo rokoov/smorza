@@ -22,8 +22,34 @@ public struct AppSettings: Codable, Equatable {
         self.lastVolume = lastVolume
     }
 
+    /// Every field may be missing: saves from before a field existed still load.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        outputDeviceUID = try container.decodeIfPresent(String.self, forKey: .outputDeviceUID)
+        outputDeviceName = try container.decodeIfPresent(String.self, forKey: .outputDeviceName)
+        volumes = try container.decodeIfPresent([String: AppVolume].self, forKey: .volumes) ?? [:]
+        lastVolume = try container.decodeIfPresent(AppVolume.self, forKey: .lastVolume)
+    }
+
     public func volume(on deviceUID: String) -> AppVolume {
         volumes[deviceUID] ?? lastVolume ?? AppVolume()
+    }
+
+    /// Where the app plays: its chosen device while connected, otherwise the system output, so
+    /// unplugged headphones send the app back to the speakers until they return.
+    public func outputDeviceUID(systemOutputUID: String, connectedUIDs: Set<String>) -> String {
+        guard let outputDeviceUID, connectedUIDs.contains(outputDeviceUID) else { return systemOutputUID }
+        return outputDeviceUID
+    }
+
+    /// Whether the app has to go through a tap: turned down, muted, or playing on another device
+    /// than the system output. An app at 100% on the system output plays untouched, also when the
+    /// device it was sent to happens to be the system output right now.
+    public func needsRoute(systemOutputUID: String, connectedUIDs: Set<String>, scale: VolumeScale) -> Bool {
+        let deviceUID = outputDeviceUID(systemOutputUID: systemOutputUID, connectedUIDs: connectedUIDs)
+        var setting = volume(on: deviceUID)
+        setting.volume = scale.clamped(setting.volume)
+        return setting.needsRouting || deviceUID != systemOutputUID
     }
 
     /// Nothing differs from an app the mixer has never seen, so there is nothing to keep.

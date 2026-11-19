@@ -1,29 +1,24 @@
 import SwiftUI
 
-/// Picks where one app plays: the system output, or a device of its own. The icon is the device the
-/// app plays on now, tinted while the app has a device of its own.
+/// The output button of an app row. It shows the device only while the app has one of its own, so
+/// rows on the system default stay clean; on those it appears while the pointer is over the row.
 struct AppOutputMenu: View {
     let entry: MixerEntry
     let devices: [OutputDevice]
     let systemOutputName: String
+    /// The row is under the pointer, so the button shows even on the system default.
+    let isRevealed: Bool
     let onChoose: (OutputDevice?) -> Void
 
     var body: some View {
         Menu {
-            Toggle("System Output (\(systemOutputName))", isOn: chosen(nil))
-            Divider()
-            ForEach(devices) { device in
-                Toggle(device.name, isOn: chosen(device))
-            }
-            if !entry.isOutputConnected {
-                Divider()
-                Text("\(entry.outputDeviceName ?? "The chosen device") is not connected")
-            }
+            AppOutputChoices(entry: entry, devices: devices, systemOutputName: systemOutputName, onChoose: onChoose)
         } label: {
             // A plain button style lets SwiftUI draw the label, so the tint shows; a borderless
             // menu draws it through AppKit, which ignores the style.
             Image(systemName: entry.outputSymbol)
-                .foregroundStyle(entry.outputDeviceUID == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tint))
+                .foregroundStyle(iconStyle)
+                .opacity(hasOwnDevice || isRevealed ? 1 : 0)
                 .frame(width: PanelMetrics.hitTarget, height: PanelMetrics.hitTarget)
                 .contentShape(Rectangle())
         }
@@ -33,19 +28,20 @@ struct AppOutputMenu: View {
         .fixedSize()
         .help(helpText)
         .accessibilityLabel("Output for \(entry.name)")
+        .accessibilityValue(entry.outputDeviceName ?? "System Default")
+    }
+
+    private var hasOwnDevice: Bool { entry.outputDeviceUID != nil }
+
+    /// Tinted on its own device; orange while that device is away and the app plays on the default.
+    private var iconStyle: AnyShapeStyle {
+        guard hasOwnDevice else { return AnyShapeStyle(.tertiary) }
+        return entry.isOutputConnected ? AnyShapeStyle(.tint) : AnyShapeStyle(.orange)
     }
 
     private var helpText: String {
-        guard entry.outputDeviceUID != nil else { return "Plays on the system output" }
+        guard hasOwnDevice else { return "Plays on the system default. Click to send it elsewhere." }
         let name = entry.outputDeviceName ?? "its own device"
-        return entry.isOutputConnected ? "Plays on \(name)" : "\(name) is not connected; plays on the system output"
-    }
-
-    /// A menu checkmark bound to whether `device` is the app's pick; choosing it sends the app there.
-    private func chosen(_ device: OutputDevice?) -> Binding<Bool> {
-        Binding(
-            get: { entry.outputDeviceUID == device?.uid },
-            set: { _ in onChoose(device) }
-        )
+        return entry.isOutputConnected ? "Plays on \(name)" : "\(name) is not connected; plays on the system default"
     }
 }

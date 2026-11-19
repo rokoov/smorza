@@ -5,7 +5,7 @@ struct VolumeMixerApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MixerPanel(model: appDelegate.model)
+            MixerPanel(model: appDelegate.model, updater: appDelegate.updater)
         } label: {
             Image(systemName: "slider.horizontal.3")
                 .accessibilityLabel("Volume Mixer")
