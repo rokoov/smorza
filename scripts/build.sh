@@ -3,7 +3,8 @@
 #   scripts/build.sh           build only
 #   scripts/build.sh run       build and launch from build/
 #   scripts/build.sh install   build, copy to /Applications and launch
-# SIGN_IDENTITY picks a signing certificate; without one the app is signed ad hoc.
+# SIGN_IDENTITY picks a signing certificate, used with the hardened runtime; without one the app
+# is signed ad hoc.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

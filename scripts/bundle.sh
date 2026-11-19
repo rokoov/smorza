@@ -29,11 +29,17 @@ make_app() {
     echo "$app"
 }
 
-# sign <path> [codesign options]: signs one item with SIGN_IDENTITY, or ad hoc without one.
+# sign <path> [codesign options]: signs one item with SIGN_IDENTITY, the hardened runtime and a
+# secure timestamp, as notarization requires, or ad hoc without an identity. Ad hoc builds leave the
+# runtime off: its library validation would refuse the ad hoc signed Sparkle.framework.
 sign() {
     local path=$1
     shift
-    codesign --force --sign "${SIGN_IDENTITY:--}" "$@" "$path"
+    if [[ -n "${SIGN_IDENTITY:-}" ]]; then
+        codesign --force --sign "$SIGN_IDENTITY" --options runtime --timestamp "$@" "$path"
+    else
+        codesign --force --sign - "$@" "$path"
+    fi
 }
 
 # sign_app <app>: signs from the inside out, as codesign requires: Sparkle's helpers, the

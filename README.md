@@ -58,7 +58,8 @@ scripts/appcast.sh <zip>    # signs a release zip and adds it to the update feed
 ```
 
 The code follows the formatting of Apple's SwiftNIO (`.swift-format`): `scripts/format.sh` applies it and
-`scripts/check.sh` fails on anything it would change.
+`scripts/check.sh` fails on anything it would change. Signing, notarizing and publishing a release is described in
+[docs/RELEASING.md](docs/RELEASING.md).
 
 ## How it works
 
