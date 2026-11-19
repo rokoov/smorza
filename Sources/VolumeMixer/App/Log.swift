@@ -1,3 +1,4 @@
 import OSLog
 
-let log = Logger(subsystem: "com.rokoov.volumemixer", category: "Mixer")
+let logSubsystem = "com.rokoov.volumemixer"
+let log = Logger(subsystem: logSubsystem, category: "Mixer")

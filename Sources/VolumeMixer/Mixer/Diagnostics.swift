@@ -1,10 +1,62 @@
 import AudioToolbox
 import CoreAudio
 import Foundation
+import OSLog
 
-/// `VolumeMixer --list`: what the mixer sees, without starting the app or touching any audio.
+/// `VolumeMixer --list` prints what the mixer sees without starting the app or touching any audio;
+/// Copy Diagnostics reports what the running app does, for a bug report.
 @MainActor
 enum Diagnostics {
+    /// Lines of this run's own log the report carries, newest last.
+    private static let logLines = 80
+
+    /// Versions, the Mac's model, what the mixer is doing and its recent log. Names apps and
+    /// devices, and nothing else about the Mac.
+    static func report(mixer: [String]) async -> String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = info?["CFBundleVersion"] as? String ?? "?"
+        let system = ProcessInfo.processInfo.operatingSystemVersion
+        var lines = [
+            "Volume Mixer \(version) (\(build))",
+            "macOS \(system.majorVersion).\(system.minorVersion).\(system.patchVersion) (\(sysctlString("kern.osversion"))), \(sysctlString("hw.model"))",
+            "",
+        ]
+        lines += mixer
+        lines += ["", "Recent log:"]
+        lines += await recentLog()
+        return lines.joined(separator: "\n")
+    }
+
+    private static func sysctlString(_ name: String) -> String {
+        var size = 0
+        guard sysctlbyname(name, nil, &size, nil, 0) == 0, size > 0 else { return "?" }
+        var value = [CChar](repeating: 0, count: size)
+        guard sysctlbyname(name, &value, &size, nil, 0) == 0 else { return "?" }
+        return value.withUnsafeBufferPointer { String(cString: $0.baseAddress!) }
+    }
+
+    /// Read off the main thread: the log store takes seconds to open.
+    private static func recentLog() async -> [String] {
+        let limit = logLines
+        return await Task.detached(priority: .userInitiated) {
+            do {
+                let store = try OSLogStore(scope: .currentProcessIdentifier)
+                let entries = try store.getEntries(matching: NSPredicate(format: "subsystem == %@", logSubsystem))
+                var lines: [String] = []
+                for case let entry as OSLogEntryLog in entries {
+                    lines.append("\(entry.date.formatted(date: .omitted, time: .standard)) \(entry.composedMessage)")
+                    if lines.count > limit {
+                        lines.removeFirst()
+                    }
+                }
+                return lines
+            } catch {
+                return ["(log unavailable: \(error.localizedDescription))"]
+            }
+        }.value
+    }
+
     static func printAudioClients() {
         let defaultOutput = try? AudioObjectID.system.read(
             kAudioHardwarePropertyDefaultOutputDevice,

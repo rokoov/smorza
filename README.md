@@ -124,6 +124,10 @@ Quit Volume Mixer from its panel, delete it from Applications and, if you like, 
 
 ## Debugging
 
+To report a problem, right-click the version at the bottom of the panel, choose **Copy Diagnostics** and paste
+the result into an issue. It lists the versions, the Mac's model, the output devices, the apps you changed or that
+are playing, and the mixer's recent log. Nothing is sent anywhere.
+
 ```sh
 /Applications/VolumeMixer.app/Contents/MacOS/VolumeMixer --list            # audio clients and output devices
 /Applications/VolumeMixer.app/Contents/MacOS/VolumeMixer --snapshot /tmp   # panel rendered to PNG, routing off
