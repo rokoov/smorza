@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// `VolumeMixer --snapshot <dir>` renders the panel with live data in light and dark, routing off.
+/// `Smorza --snapshot <dir>` renders the panel with live data in light and dark, routing off.
 /// `--snapshot-demo <dir>` does the same with `DemoContent`, for the README.
 @MainActor
 enum PanelSnapshot {

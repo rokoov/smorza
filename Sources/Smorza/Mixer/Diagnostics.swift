@@ -3,7 +3,7 @@ import CoreAudio
 import Foundation
 import OSLog
 
-/// `VolumeMixer --list` prints what the mixer sees without starting the app or touching any audio;
+/// `Smorza --list` prints what the mixer sees without starting the app or touching any audio;
 /// Copy Diagnostics reports what the running app does, for a bug report.
 @MainActor
 enum Diagnostics {
@@ -18,7 +18,7 @@ enum Diagnostics {
         let build = info?["CFBundleVersion"] as? String ?? "?"
         let system = ProcessInfo.processInfo.operatingSystemVersion
         var lines = [
-            "Volume Mixer \(version) (\(build))",
+            "Smorza \(version) (\(build))",
             "macOS \(system.majorVersion).\(system.minorVersion).\(system.patchVersion) (\(sysctlString("kern.osversion"))), \(sysctlString("hw.model"))",
             "",
         ]

@@ -1,20 +1,20 @@
 #!/bin/bash
-# Shared by build.sh and release.sh, which source it: puts VolumeMixer.app together and signs it.
+# Shared by build.sh and release.sh, which source it: puts Smorza.app together and signs it.
 #
 # The bundle is assembled and signed in a temporary folder. In an iCloud-synced checkout the File
 # Provider tags files with Finder info at any moment, and codesign refuses such files as detritus.
 
-# make_app <binary> <Sparkle.framework>: prints the path of a new, unsigned VolumeMixer.app in a
+# make_app <binary> <Sparkle.framework>: prints the path of a new, unsigned Smorza.app in a
 # temporary folder.
 make_app() {
     local binary=$1
     local sparkle=$2
     local staging
-    staging=$(mktemp -d "${TMPDIR:-/tmp}/volume-mixer.XXXXXX")
-    local app="$staging/VolumeMixer.app"
+    staging=$(mktemp -d "${TMPDIR:-/tmp}/smorza.XXXXXX")
+    local app="$staging/Smorza.app"
     mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$app/Contents/Frameworks"
     # Copied without extended attributes: they carry the Finder info that codesign refuses.
-    cp -X "$binary" "$app/Contents/MacOS/VolumeMixer"
+    cp -X "$binary" "$app/Contents/MacOS/Smorza"
     cp -X Resources/Info.plist "$app/Contents/Info.plist"
     cp -X Resources/AppIcon.icns "$app/Contents/Resources/AppIcon.icns"
     plutil -lint "$app/Contents/Info.plist" >/dev/null
@@ -22,7 +22,7 @@ make_app() {
     local framework="$app/Contents/Frameworks/Sparkle.framework"
     ditto --norsrc --noextattr "$sparkle" "$framework"
     # Embedded like Xcode does: no headers or module maps, and no XPC services, which Sparkle only
-    # needs for sandboxed apps (Volume Mixer is not sandboxed).
+    # needs for sandboxed apps (Smorza is not sandboxed).
     for part in Headers PrivateHeaders Modules XPCServices; do
         rm -rf "${framework:?}/$part" "${framework:?}/Versions/B/$part"
     done
@@ -50,7 +50,7 @@ sign_app() {
     sign "$framework/Versions/B/Autoupdate"
     sign "$framework/Versions/B/Updater.app"
     sign "$framework"
-    sign "$app" --identifier com.rokoov.volumemixer
+    sign "$app" --identifier com.rokoov.smorza
     codesign --verify --deep --strict "$app"
 }
 

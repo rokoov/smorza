@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct VolumeMixerApp: App {
+struct SmorzaApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
@@ -8,7 +8,7 @@ struct VolumeMixerApp: App {
             MixerPanel(model: appDelegate.model, updater: appDelegate.updater)
         } label: {
             Image(systemName: "slider.horizontal.3")
-                .accessibilityLabel("Volume Mixer")
+                .accessibilityLabel("Smorza")
         }
         .menuBarExtraStyle(.window)
     }

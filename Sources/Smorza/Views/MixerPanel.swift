@@ -159,7 +159,7 @@ struct MixerPanel: View {
                 }
             }
             if loginItem.needsApproval {
-                Text("Allow Volume Mixer in System Settings → General → Login Items.")
+                Text("Allow Smorza in System Settings → General → Login Items.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else if let error = loginItem.error {

@@ -35,7 +35,7 @@ struct VersionRow: View {
 
     private var label: String {
         switch copyState {
-        case .idle: "Volume Mixer \(version)"
+        case .idle: "Smorza \(version)"
         case .copying: "Copying diagnostics…"
         case .copied: "Diagnostics copied"
         }

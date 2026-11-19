@@ -9,7 +9,7 @@ import Observation
 final class VolumeKeys {
     /// How often the permission is checked again while the option is on but not yet allowed.
     private static let trustPollInterval: Duration = .seconds(2)
-    private static let enabledKey = "VolumeKeysEnabled"
+    nonisolated static let enabledKey = "VolumeKeysEnabled"
 
     private(set) var isEnabled = UserDefaults.standard.bool(forKey: VolumeKeys.enabledKey)
     private(set) var isTrusted = AXIsProcessTrusted()

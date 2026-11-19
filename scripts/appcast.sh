@@ -1,6 +1,6 @@
 #!/bin/bash
 # Signs a release zip with Sparkle's sign_update and adds it to docs/appcast.xml, newest first.
-#   scripts/appcast.sh build/VolumeMixer-<version>.zip [notes.txt]
+#   scripts/appcast.sh build/Smorza-<version>.zip [notes.txt]
 # The notes, plain text, are what the update window shows; without them it shows none.
 # The EdDSA private key comes from the login keychain (made once with generate_keys, see
 # docs/RELEASING.md), or from the file in SPARKLE_KEY_FILE. GitHub Pages serves docs/ from main, so
@@ -9,7 +9,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-zip=${1:?"usage: scripts/appcast.sh build/VolumeMixer-<version>.zip [notes.txt]"}
+zip=${1:?"usage: scripts/appcast.sh build/Smorza-<version>.zip [notes.txt]"}
 notes=${2:-}
 [[ -f "$zip" ]] || { echo "No such file: $zip" >&2; exit 1; }
 [[ -z "$notes" || -f "$notes" ]] || { echo "No such file: $notes" >&2; exit 1; }
@@ -19,7 +19,7 @@ version=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$plist
 build=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$plist")
 minimum=$(/usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" "$plist")
 appcast=docs/appcast.xml
-repository=https://github.com/rokoov/volume-mixer
+repository=https://github.com/rokoov/smorza
 marker="<!-- scripts/appcast.sh adds each release below this line, newest first -->"
 
 if grep -q "<sparkle:shortVersionString>$version</sparkle:shortVersionString>" "$appcast"; then
