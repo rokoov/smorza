@@ -94,13 +94,21 @@ disappears, helpers show under their own names.
 | `Sources/VolumeMixer/App` | Entry point, app delegate, login item, updates, logging |
 | `Checks/MixerCoreChecks` | Checks for `MixerCore`, run by `scripts/check.sh` |
 
+## Performance
+
+Apps you leave at 100% on the default output never pass through the mixer: they keep their own path to the
+speakers, with no added latency and no work for the mixer. An app the mixer plays (turned down, muted or sent to
+another device) reaches the speakers about 12 ms later: two 256-frame IO cycles at 48 kHz, plus the device's
+safety offsets.
+
+Measured on an M4 MacBook Air with macOS 27, each app the mixer plays costs about 1.1% of one core in coreaudiod
+and 0.3% in the mixer. The level meters only run while the panel is open.
+
 ## Known issues
 
 - A turned-down app that was idle starts a few milliseconds late when it plays again
 - An app sent to a device in the mixer plays there even if the app picked another device in its own settings;
   one left on the system default but turned down follows the system default the same way
-- An aggregate device that includes a microphone (made in Audio MIDI Setup) does not work as an output yet: a
-  turned-down app that plays there stays silent. Pick the real device instead
 - Other audio routing tools (Background Music, SoundSource, Loopback) can fight over the same apps
 - Builds you make yourself are signed ad hoc, so macOS may ask for the permissions again after each build
 
@@ -125,6 +133,10 @@ Quit Volume Mixer from its panel, delete it from Applications and, if you like, 
 `tccutil reset AudioCapture com.rokoov.volumemixer`
 
 ## Debugging
+
+To report a problem, right-click the version at the bottom of the panel, choose **Copy Diagnostics** and paste
+the result into an issue. It lists the versions, the Mac's model, the output devices, the apps you changed or that
+are playing, and the mixer's recent log. Nothing is sent anywhere.
 
 ```sh
 /Applications/VolumeMixer.app/Contents/MacOS/VolumeMixer --list            # audio clients and output devices

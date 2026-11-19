@@ -421,6 +421,38 @@ final class MixerModel {
         }
     }
 
+    /// Puts a report of what the mixer sees and does on the clipboard, for a bug report.
+    func copyDiagnostics() async {
+        let report = await Diagnostics.report(mixer: diagnosticSummary())
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(report, forType: .string)
+    }
+
+    private func diagnosticSummary() -> [String] {
+        var lines = ["Capture check: \(capture.state)"]
+        if let routingError {
+            lines.append("Last error: \(routingError)")
+        }
+        lines.append("Output devices:")
+        for device in output.devices {
+            let marker = device.id == output.deviceID ? "*" : " "
+            let inputs = device.id.streamCount(scope: kAudioObjectPropertyScopeInput)
+            lines.append("  \(marker) \(device.name) [\(device.uid)], \(inputs) input streams")
+        }
+        let apps = currentApps()
+        let quiet = apps.filter { !$0.isPlaying && !$0.needsRoute && $0.settings.isDefault }
+        lines.append("Apps (\(quiet.count) more idle at 100% on the default output):")
+        for app in apps where !quiet.contains(where: { $0.key == app.key }) {
+            let level = app.volume.isMuted ? "muted" : "\(VolumeCurve.percent(app.volume.volume))%"
+            let state = app.isPlaying ? "playing" : "idle"
+            let route = app.needsRoute ? ", routed" : ""
+            lines.append("  \(app.identity.name) [\(app.key)]: \(state), \(level) on \(app.outputDeviceUID)\(route)")
+        }
+        lines.append("Routes:")
+        lines += routes.summary().map { "  \($0)" }
+        return lines
+    }
+
     /// Takes every route and check down before the app exits. A process that dies with routes
     /// running leaves coreaudiod tearing them down for up to a minute, and a mixer launched
     /// meanwhile hangs on its first route.

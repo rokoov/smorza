@@ -35,17 +35,18 @@ final class CaptureCheckController {
     @ObservationIgnored private var check: CaptureCheck?
     @ObservationIgnored private var device = AudioObjectID.unknown
     @ObservationIgnored private var task: Task<Void, Never>?
+    /// The output device changed under a running check, which rebuilds itself on the new one.
+    @ObservationIgnored private var needsRestart = false
 
-    var isRunning: Bool { check != nil }
+    var isRunning: Bool { task != nil }
 
     func begin(on device: AudioObjectID) {
-        guard state == .unknown, check == nil else { return }
+        guard state == .unknown, task == nil, device.isKnown else { return }
         self.device = device
-        guard startCheck() else { return }
         state = .checking
         log.notice("Checking that macOS lets the mixer hear other apps")
         task = Task { [weak self] in
-            await self?.watch(since: .now)
+            await self?.run(since: .now)
         }
     }
 
@@ -57,8 +58,8 @@ final class CaptureCheckController {
 
     func outputDeviceChanged(to device: AudioObjectID) {
         self.device = device
-        if check != nil {
-            restartCheck()
+        if task != nil {
+            needsRestart = true
         }
     }
 
@@ -72,16 +73,22 @@ final class CaptureCheckController {
 
     /// Drops a running check without touching it, for after coreaudiod restarted.
     func abandon() {
-        guard let check else { return }
-        check.abandon()
-        self.check = nil
+        guard task != nil || check != nil else { return }
+        check?.abandon()
+        check = nil
         task?.cancel()
         task = nil
         state = .unknown
     }
 
-    private func watch(since started: ContinuousClock.Instant) async {
-        var lastStart = started
+    private func run(since started: ContinuousClock.Instant) async {
+        guard await startCheck() else {
+            // Nothing to listen with (a HAL error): the next sync of the routes tries again.
+            task = nil
+            state = .unknown
+            return
+        }
+        var lastStart = ContinuousClock.now
         while !Task.isCancelled {
             try? await Task.sleep(for: Timing.poll)
             guard !Task.isCancelled else { return }
@@ -94,37 +101,52 @@ final class CaptureCheckController {
                 finish(allowed: false, after: now - started)
                 return
             }
-            if now - lastStart >= Timing.restart {
-                lastStart = now
-                restartCheck()
+            if needsRestart || now - lastStart >= Timing.restart {
+                await restartCheck()
+                lastStart = ContinuousClock.now
             }
         }
     }
 
     @discardableResult
-    private func startCheck() -> Bool {
-        guard device.isKnown else { return false }
-        do {
-            check = try CaptureCheck(outputDevice: device)
+    private func startCheck() async -> Bool {
+        let device = device
+        let result = await HALQueue.run { Result { try CaptureCheck(outputDevice: device) } }
+        guard !Task.isCancelled else {
+            // Shut down or abandoned while the check was being built.
+            if case .success(let check) = result {
+                await HALQueue.run { check.invalidate() }
+            }
+            return false
+        }
+        switch result {
+        case .success(let check):
+            self.check = check
             lastError = nil
             return true
-        } catch {
+        case .failure(let error):
             lastError = "Audio check: \(error.localizedDescription)"
             log.error("Capture check could not start: \(error.localizedDescription, privacy: .public)")
             return false
         }
     }
 
-    private func restartCheck() {
-        check?.invalidate()
-        check = nil
-        startCheck()
+    private func restartCheck() async {
+        needsRestart = false
+        if let old = check {
+            check = nil
+            await HALQueue.run { old.invalidate() }
+        }
+        guard !Task.isCancelled else { return }
+        await startCheck()
     }
 
     private func finish(allowed: Bool, after elapsed: Duration) {
         task = nil
-        check?.invalidate()
-        check = nil
+        if let old = check {
+            check = nil
+            Task { await HALQueue.run { old.invalidate() } }
+        }
         state = allowed ? .allowed : .blocked
         wasBlocked = !allowed
         let duration = elapsed.formatted(.units(allowed: [.seconds, .milliseconds]))

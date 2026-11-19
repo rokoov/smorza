@@ -168,7 +168,7 @@ struct MixerPanel: View {
                     .foregroundStyle(.red)
                     .lineLimit(2)
             }
-            UpdateRow(updater: updater)
+            VersionRow(updater: updater, onCopyDiagnostics: model.copyDiagnostics)
                 .padding(.top, 4)
         }
         .controlSize(.small)

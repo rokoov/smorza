@@ -110,6 +110,18 @@ final class RouteManager {
         cancelPendingWork()
     }
 
+    /// One line per route and per app whose route keeps failing, for Copy Diagnostics.
+    func summary() -> [String] {
+        let running = routes.keys.sorted().compactMap { key -> String? in
+            guard let route = routes[key] else { return nil }
+            let state =
+                route.isRunning ? (receivingAudio.contains(key) ? "running, audio heard" : "running") : "stopped"
+            return "\(route.label) to \(route.deviceUID): \(state), gain \(String(format: "%.3f", route.gain))"
+        }
+        let failing = failedAttempts.keys.sorted().map { "\($0): \(failedAttempts[$0, default: 0]) failed attempts" }
+        return running + failing
+    }
+
     /// Gives an app whose route failed another chance, after the user touched its slider.
     func clearFailures(for key: String) {
         failedAttempts[key] = nil

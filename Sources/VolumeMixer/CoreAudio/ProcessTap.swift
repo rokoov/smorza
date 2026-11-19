@@ -17,8 +17,9 @@ final class ProcessTap {
     private(set) var isRunning = false
 
     private let renderer: TapRenderer
-    private let deviceInputStreams: Int
-    private let tapUUID = UUID()
+    /// Inputs of the output device (a headset microphone) that come ahead of the tap's stream.
+    private let inputsAheadOfTap: Int
+    private let tapUUID: UUID
     private var tapID = AudioObjectID.unknown
     private var aggregateID = AudioObjectID.unknown
     private var ioProcID: AudioDeviceIOProcID?
@@ -28,19 +29,17 @@ final class ProcessTap {
         self.processObjectIDs = processObjectIDs
         self.outputDevice = outputDevice
         deviceUID = try outputDevice.readString(kAudioDevicePropertyDeviceUID)
-        // An output device with its own inputs (a headset) puts them ahead of the tap's stream.
-        deviceInputStreams = outputDevice.streamCount(scope: kAudioObjectPropertyScopeInput)
+        let tapUUID = UUID()
+        let parts = try Self.makeTapAndAggregate(of: processObjectIDs, tapUUID: tapUUID, outputDeviceUID: deviceUID)
+        self.tapUUID = tapUUID
+        tapID = parts.tapID
+        aggregateID = parts.aggregateID
+        inputsAheadOfTap = parts.tapStreamIndex
         // The limiter's release is timed in samples at the rate the route will run at.
         let sampleRate =
             (try? outputDevice.read(kAudioDevicePropertyNominalSampleRate, initial: Float64(48_000))) ?? 48_000
-        renderer = TapRenderer(tapBufferIndex: deviceInputStreams, gain: gain, sampleRate: sampleRate)
+        renderer = TapRenderer(tapBufferIndex: parts.tapStreamIndex, gain: gain, sampleRate: sampleRate)
         do {
-            try check(AudioHardwareCreateProcessTap(makeDescription(processObjectIDs), &tapID), "Creating the tap")
-            aggregateID = try PrivateAggregateDevice.make(
-                name: "Volume Mixer route",
-                outputDeviceUID: deviceUID,
-                tapUUID: tapUUID
-            )
             try createIOProc()
         } catch {
             invalidate()
@@ -60,7 +59,7 @@ final class ProcessTap {
     /// Changes which processes the tap hears without stopping the route, for an app that starts or
     /// loses a helper process.
     func setProcesses(_ objectIDs: [AudioObjectID]) throws {
-        var description = makeDescription(objectIDs)
+        var description = Self.makeDescription(objectIDs, tapUUID: tapUUID)
         var address = AudioObjectPropertyAddress(kAudioTapPropertyDescription)
         let size = UInt32(MemoryLayout<CATapDescription>.size)
         let status = withUnsafeMutablePointer(to: &description) { pointer in
@@ -107,7 +106,36 @@ final class ProcessTap {
         isRunning = false
     }
 
-    private func makeDescription(_ objectIDs: [AudioObjectID]) -> CATapDescription {
+    /// Creates the muted tap and the aggregate device that plays it, and finds the tap's stream among
+    /// the aggregate's inputs. Leaves nothing behind when it throws.
+    private static func makeTapAndAggregate(
+        of processObjectIDs: [AudioObjectID],
+        tapUUID: UUID,
+        outputDeviceUID: String
+    ) throws -> (tapID: AudioObjectID, aggregateID: AudioObjectID, tapStreamIndex: Int) {
+        var tapID = AudioObjectID.unknown
+        var aggregateID = AudioObjectID.unknown
+        do {
+            let description = makeDescription(processObjectIDs, tapUUID: tapUUID)
+            try check(AudioHardwareCreateProcessTap(description, &tapID), "Creating the tap")
+            aggregateID = try PrivateAggregateDevice.make(
+                name: "Volume Mixer route",
+                outputDeviceUID: outputDeviceUID,
+                tapUUID: tapUUID
+            )
+            return (tapID, aggregateID, try PrivateAggregateDevice.tapStreamIndex(of: aggregateID))
+        } catch {
+            if aggregateID.isKnown {
+                AudioHardwareDestroyAggregateDevice(aggregateID)
+            }
+            if tapID.isKnown {
+                AudioHardwareDestroyProcessTap(tapID)
+            }
+            throw error
+        }
+    }
+
+    private static func makeDescription(_ objectIDs: [AudioObjectID], tapUUID: UUID) -> CATapDescription {
         let description = CATapDescription(stereoMixdownOfProcesses: objectIDs)
         description.uuid = tapUUID
         description.name = "Volume Mixer route"
@@ -126,7 +154,7 @@ final class ProcessTap {
         }
         try check(status, "Creating the IO callback")
         if let ioProcID {
-            PrivateAggregateDevice.ignoreInputStreams(deviceInputStreams, of: aggregateID, procID: ioProcID)
+            PrivateAggregateDevice.ignoreInputStreams(inputsAheadOfTap, of: aggregateID, procID: ioProcID)
         }
     }
 }
