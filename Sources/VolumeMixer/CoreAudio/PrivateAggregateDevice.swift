@@ -7,6 +7,10 @@ import Foundation
 enum PrivateAggregateDevice {
     /// Every UID starts with this, so the output list can leave the mixer's own devices out.
     static let uidPrefix = "com.rokoov.volumemixer.route."
+    /// Frames per IO cycle. A route delays its app by about two cycles plus the device's safety
+    /// offsets: 12 ms at 256 frames and 48 kHz, against 23 ms at the usual 512. Measured on an M4
+    /// MacBook Air, a route costs about 1.1% of a core in coreaudiod either way.
+    static let bufferFrames: UInt32 = 256
 
     static func make(name: String, outputDeviceUID: String, tapUUID: UUID) throws -> AudioObjectID {
         let composition: [String: Any] = [
@@ -22,6 +26,16 @@ enum PrivateAggregateDevice {
         ]
         var deviceID = AudioObjectID.unknown
         try check(AudioHardwareCreateAggregateDevice(composition as CFDictionary, &deviceID), "Creating \(name)")
+        var frames = bufferFrames
+        var address = AudioObjectPropertyAddress(kAudioDevicePropertyBufferFrameSize)
+        let size = UInt32(MemoryLayout<UInt32>.size)
+        let status = AudioObjectSetPropertyData(deviceID, &address, 0, nil, size, &frames)
+        if status != noErr {
+            // The route still works at the device's own buffer size, only later.
+            log.error(
+                "Could not set the buffer size: \(fourCharacterCode(UInt32(bitPattern: status)), privacy: .public)"
+            )
+        }
         return deviceID
     }
 
