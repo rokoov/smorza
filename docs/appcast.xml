@@ -6,5 +6,25 @@
     <description>Updates for Smorza</description>
     <language>en</language>
     <!-- scripts/appcast.sh adds each release below this line, newest first -->
+    <item>
+      <title>Version 0.2.1</title>
+      <pubDate>Thu, 19 Nov 2026 23:38:46 +0000</pubDate>
+      <sparkle:version>3</sparkle:version>
+      <sparkle:shortVersionString>0.2.1</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.4</sparkle:minimumSystemVersion>
+      <sparkle:fullReleaseNotesLink>https://github.com/rokoov/smorza/releases/tag/v0.2.1</sparkle:fullReleaseNotesLink>
+      <description sparkle:descriptionFormat="plain-text"><![CDATA[Smorza 0.2.1, the first release under the new name (formerly Volume Mixer).
+
+- An output device for each app: Spotify on the speakers, Discord in the AirPods
+- Level meters under the apps that go through the mixer, while the panel is open
+- Updates itself from now on: checks once a day and asks before installing
+- Turned-down apps reach the speakers 10 ms sooner (12 ms instead of 23 ms)
+- The app opens at once instead of waiting on macOS's audio service
+- An aggregate device that includes a microphone works as an output
+- Copy Diagnostics: right-click the version at the bottom of the panel
+
+Coming from Volume Mixer: Smorza takes over your volumes and devices on its first launch. macOS asks for the audio permission once more, because the app has a new name.]]></description>
+      <enclosure url="https://github.com/rokoov/smorza/releases/download/v0.2.1/Smorza-0.2.1.zip" type="application/octet-stream" sparkle:edSignature="308VSbpeKzHFvnEyZN2fncrcBLnZUN35qu/rJEalPS5z390dpNS1bCeRwkDwqTmeVsGLYV2opQ3b6lDcw/l0Bg==" length="1941005" />
+    </item>
   </channel>
 </rss>
