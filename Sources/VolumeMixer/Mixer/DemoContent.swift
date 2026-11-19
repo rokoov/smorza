@@ -34,6 +34,9 @@ enum DemoContent {
 
     static let outputVolume = 0.5
 
+    /// Live levels of the routed demo apps (Spotify and Discord are turned down, so they have routes).
+    static let meterBars: [String: Float] = ["Spotify": 0.72, "Discord": 0.45]
+
     /// The overlay after Control + volume down in Spotify.
     @MainActor
     static var hud: VolumeHUDView {

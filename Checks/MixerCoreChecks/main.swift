@@ -425,5 +425,17 @@ do {
     expect(!sent.isDefault, "a chosen device is worth keeping even at 100%")
 }
 
+// Level meters: a decibel bar that rises at once and falls back gently.
+do {
+    expect(LevelMeter.fraction(ofPeak: 1) == 1, "full scale fills the bar")
+    expect(LevelMeter.fraction(ofPeak: 2) == 1, "a peak over full scale still fills it, no more")
+    expect(LevelMeter.fraction(ofPeak: 0) == 0, "silence is an empty bar")
+    expect(LevelMeter.fraction(ofPeak: 0.0005) == 0, "under -60 dB is empty")
+    expect(nearlyEqual(LevelMeter.fraction(ofPeak: 0.031_622_8), 0.5), "-30 dB is half the bar")
+    expect(LevelMeter.next(from: 0.2, toward: 0.9) == 0.9, "a louder peak shows at once")
+    expect(nearlyEqual(LevelMeter.next(from: 0.9, toward: 0), 0.84), "a bar falls one step per update")
+    expect(LevelMeter.next(from: 0.03, toward: 0) == 0, "and stops at the new level, never below it")
+}
+
 print("\(passed) passed, \(failures) failed")
 exit(failures == 0 ? 0 : 1)

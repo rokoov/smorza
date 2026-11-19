@@ -17,6 +17,7 @@ enum PanelSnapshot {
         model.routesAudio = false
         if demo {
             model.showDemo(DemoContent.entries)
+            model.meters.showDemo(DemoContent.meterBars)
             model.output.showDemo(
                 name: DemoContent.devices[0].name,
                 symbolName: DemoContent.devices[0].symbolName,

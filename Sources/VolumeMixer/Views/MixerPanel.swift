@@ -96,6 +96,7 @@ struct MixerPanel: View {
                 AppRow(
                     entry: entry,
                     scale: model.volumeScale,
+                    meters: model.meters,
                     devices: model.output.devices,
                     systemOutputName: model.output.name,
                     onVolume: { model.setVolume($0, for: entry.id) },

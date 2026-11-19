@@ -15,6 +15,10 @@ final class MixerModel {
         static let heartbeat: Duration = .seconds(1)
         /// Pause after waking from sleep, while devices come back, before routes are rebuilt.
         static let wakeRebuild: Duration = .seconds(2)
+        /// How often the level meters read the routes while the panel is open.
+        static let meterUpdate: Duration = .milliseconds(50)
+        /// The same with Reduce Motion on: a calm reading twice a second instead of a moving bar.
+        static let calmMeterUpdate: Duration = .milliseconds(500)
     }
 
     private(set) var entries: [MixerEntry] = []
@@ -25,6 +29,7 @@ final class MixerModel {
     /// How far the sliders go: to 100%, or to 200% where boost is on.
     let volumeScale = ProFeatures.volumeScale
     let volumeKeys = VolumeKeys()
+    let meters = MeterLevels()
     /// Off only for the `--snapshot` previews, which must never touch anyone's audio.
     @ObservationIgnored var routesAudio = true
 
@@ -41,6 +46,7 @@ final class MixerModel {
     @ObservationIgnored private var isPanelVisible = false
     @ObservationIgnored private var isDemo = false
     @ObservationIgnored private var heartbeat: Task<Void, Never>?
+    @ObservationIgnored private var meterLoop: Task<Void, Never>?
     @ObservationIgnored private var napBlocker: NSObjectProtocol?
     @ObservationIgnored private var restartListener: PropertyListener?
     @ObservationIgnored private var wakeObserver: NSObjectProtocol?
@@ -94,6 +100,7 @@ final class MixerModel {
     func panelDidDisappear() {
         guard isPanelVisible else { return }
         isPanelVisible = false
+        meters.clear()
         rebuildEntries(from: currentApps())
         updateBackgroundWork()
         log.notice("Panel closed")
@@ -462,10 +469,30 @@ final class MixerModel {
             heartbeat?.cancel()
             heartbeat = nil
         }
+
+        // Meters only matter while someone looks at them, and only routes have levels to show.
+        let needsMeters = isPanelVisible && !routes.isEmpty
+        if needsMeters, meterLoop == nil {
+            meterLoop = Task { [weak self] in
+                while !Task.isCancelled {
+                    let isCalm = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+                    try? await Task.sleep(for: isCalm ? Timing.calmMeterUpdate : Timing.meterUpdate)
+                    guard !Task.isCancelled, let self else { return }
+                    meters.update(with: routes.sampleLevels(), isSmoothed: !isCalm)
+                }
+            }
+        } else if !needsMeters {
+            meterLoop?.cancel()
+            meterLoop = nil
+            meters.clear()
+        }
     }
 
     private func beat() {
         monitor.refreshPlaying()
-        routes.reportIncomingAudio()
+        // While the panel is open the meters read the routes; otherwise this only logs first audio.
+        if meterLoop == nil {
+            _ = routes.sampleLevels()
+        }
     }
 }

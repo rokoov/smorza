@@ -5,6 +5,7 @@ import SwiftUI
 struct AppRow: View {
     let entry: MixerEntry
     let scale: VolumeScale
+    let meters: MeterLevels
     let devices: [OutputDevice]
     let systemOutputName: String
     let onVolume: (Double) -> Void
@@ -32,7 +33,8 @@ struct AppRow: View {
                 systemOutputName: systemOutputName,
                 isRevealed: isHovered,
                 onChoose: onChooseOutput
-            )
+            ),
+            meter: LevelMeterBar(meters: meters, key: entry.id)
         ) {
             Image(nsImage: entry.icon)
                 .resizable()
