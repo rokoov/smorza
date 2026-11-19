@@ -5,9 +5,9 @@ import SwiftUI
 struct MixerPanel: View {
     let model: MixerModel
     let updater: Updater
-    @State private var loginItem = LoginItem()
     @State private var isSavingProfile = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -60,7 +60,6 @@ struct MixerPanel: View {
             WindowVisibilityReader { isVisible in
                 if isVisible {
                     model.panelDidAppear()
-                    loginItem.refresh()
                 } else {
                     model.panelDidDisappear()
                 }
@@ -121,58 +120,39 @@ struct MixerPanel: View {
     }
 
     private var footer: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Toggle("Open at login", isOn: Binding(get: { loginItem.isEnabled }, set: { loginItem.setEnabled($0) }))
-                    .toggleStyle(.checkbox)
-                Spacer()
-                if ProFeatures.isProfilesEnabled {
-                    ProfilesMenu(
-                        profiles: model.profiles,
-                        onApply: model.applyProfile,
-                        onSave: { isSavingProfile = true },
-                        onDelete: model.deleteProfile
-                    )
-                }
-                Button("Quit") { NSApp.terminate(nil) }
-                    .keyboardShortcut("q")
+        HStack(spacing: 8) {
+            if ProFeatures.isProfilesEnabled {
+                ProfilesMenu(
+                    profiles: model.profiles,
+                    onApply: model.applyProfile,
+                    onSave: { isSavingProfile = true },
+                    onDelete: model.deleteProfile
+                )
             }
-            Toggle(
-                "Control + volume keys change the app in front",
-                isOn: Binding(get: { model.volumeKeys.isEnabled }, set: { model.volumeKeys.setEnabled($0) })
-            )
-            .toggleStyle(.checkbox)
-            if model.volumeKeys.isEnabled, !model.volumeKeys.isTrusted {
-                HStack(spacing: 6) {
-                    Text("Needs Accessibility to catch the keys.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Button("Open Settings") {
-                        if let url = URL(
-                            string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
-                        ) {
-                            NSWorkspace.shared.open(url)
-                        }
-                    }
+            if updater.isUpdateWaiting {
+                Button("Update Available…") { updater.checkForUpdates() }
                     .buttonStyle(.link)
-                    .font(.caption)
-                }
             }
-            if loginItem.needsApproval {
-                Text("Allow Smorza in System Settings → General → Login Items.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else if let error = loginItem.error {
-                Text(error)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                    .lineLimit(2)
+            Spacer()
+            Button {
+                openSettings()
+                // A menu bar app is not active, so the window would open behind the others.
+                NSApp.activate()
+            } label: {
+                Image(systemName: "gearshape")
+                    .frame(width: PanelMetrics.hitTarget, height: PanelMetrics.hitTarget)
+                    .contentShape(Rectangle())
             }
-            VersionRow(updater: updater, onCopyDiagnostics: model.copyDiagnostics)
-                .padding(.top, 4)
+            .buttonStyle(.borderless)
+            .foregroundStyle(.secondary)
+            .help("Settings…")
+            .accessibilityLabel("Settings")
+            .keyboardShortcut(",")
+            Button("Quit") { NSApp.terminate(nil) }
+                .keyboardShortcut("q")
         }
         .controlSize(.small)
         .padding(.horizontal, PanelMetrics.padding)
-        .padding(.vertical, 10)
+        .padding(.vertical, 8)
     }
 }

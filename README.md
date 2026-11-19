@@ -20,6 +20,7 @@ process taps that macOS 14.4 and later provide. Smorza was called Volume Mixer u
 - Apps at 100% on the default output are never touched. Only apps you turn down, mute or send to another device
   go through the mixer
 - Updates itself: checks once a day and asks before installing
+- A small settings window, behind the gear in the panel: open at login, the volume keys, updates
 - Universal app for Apple silicon and Intel Macs
 
 <picture>
@@ -133,8 +134,8 @@ Quit Smorza from its panel, delete it from Applications and, if you like, remove
 
 ## Debugging
 
-To report a problem, right-click the version at the bottom of the panel, choose **Copy Diagnostics** and paste
-the result into an issue. It lists the versions, the Mac's model, the output devices, the apps you changed or that
+To report a problem, open Settings (the gear in the panel), right-click the version under Updates, choose
+**Copy Diagnostics** and paste the result into an issue. It lists the versions, the Mac's model, the output devices, the apps you changed or that
 are playing, and the mixer's recent log. Nothing is sent anywhere.
 
 ```sh
