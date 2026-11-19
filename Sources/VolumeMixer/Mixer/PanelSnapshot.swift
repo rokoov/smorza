@@ -14,10 +14,12 @@ enum PanelSnapshot {
     static func write(to directory: String, demo: Bool) {
         NSApplication.shared.setActivationPolicy(.prohibited)
         let model = MixerModel()
+        let updater = Updater()
         model.routesAudio = false
         if demo {
             model.showDemo(DemoContent.entries)
             model.meters.showDemo(DemoContent.meterBars)
+            updater.showDemo()
             model.output.showDemo(
                 name: DemoContent.devices[0].name,
                 symbolName: DemoContent.devices[0].symbolName,
@@ -30,7 +32,11 @@ enum PanelSnapshot {
 
         for (name, appearanceName) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
             guard let appearance = NSAppearance(named: appearanceName) else { continue }
-            write(render(framed(MixerPanel(model: model)), appearance: appearance), as: "panel-\(name)", in: directory)
+            write(
+                render(framed(MixerPanel(model: model, updater: updater)), appearance: appearance),
+                as: "panel-\(name)",
+                in: directory
+            )
             if demo {
                 write(render(DemoContent.hud.padding(margin), appearance: appearance), as: "hud-\(name)", in: directory)
             }

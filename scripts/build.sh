@@ -11,7 +11,8 @@ swift build -c release --product VolumeMixer
 source scripts/bundle.sh
 
 APP="build/VolumeMixer.app"
-staged=$(make_app "$(swift build -c release --show-bin-path)/VolumeMixer")
+products=$(swift build -c release --show-bin-path)
+staged=$(make_app "$products/VolumeMixer" "$products/Sparkle.framework")
 sign_app "$staged"
 deliver_app "$staged" "$APP"
 echo "Built $APP"

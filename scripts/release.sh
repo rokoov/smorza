@@ -16,14 +16,16 @@ binaries=()
 for arch in arm64 x86_64; do
     triple="$arch-apple-macosx$minimum"
     swift build -c release --product VolumeMixer --triple "$triple"
+    products=$(swift build -c release --product VolumeMixer --triple "$triple" --show-bin-path)
     # Copied at once: some SwiftPM versions put both architectures in the same output folder.
-    cp "$(swift build -c release --product VolumeMixer --triple "$triple" --show-bin-path)/VolumeMixer" \
-        "$work/VolumeMixer-$arch"
+    cp -X "$products/VolumeMixer" "$work/VolumeMixer-$arch"
     binaries+=("$work/VolumeMixer-$arch")
+    # Sparkle ships one universal framework, the same for both builds.
+    sparkle="$products/Sparkle.framework"
 done
 joined="$work/VolumeMixer"
 lipo -create "${binaries[@]}" -output "$joined"
-staged=$(make_app "$joined")
+staged=$(make_app "$joined" "$sparkle")
 rm -rf "$work"
 sign_app "$staged"
 
@@ -31,6 +33,6 @@ sign_app "$staged"
 zip="build/VolumeMixer-$version.zip"
 rm -f "$zip"
 ditto -c -k --norsrc --noextattr --keepParent "$staged" "$zip"
-lipo -info "$staged/Contents/MacOS/VolumeMixer"
+lipo -info "$staged/Contents/MacOS/VolumeMixer" "$staged/Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle"
 deliver_app "$staged" build/release/VolumeMixer.app
 shasum -a 256 "$zip"

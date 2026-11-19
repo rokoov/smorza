@@ -4,6 +4,7 @@ import SwiftUI
 /// The menu bar panel: the output volume, a row per app, the output devices and the footer.
 struct MixerPanel: View {
     let model: MixerModel
+    let updater: Updater
     @State private var loginItem = LoginItem()
     @State private var isSavingProfile = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -167,6 +168,8 @@ struct MixerPanel: View {
                     .foregroundStyle(.red)
                     .lineLimit(2)
             }
+            UpdateRow(updater: updater)
+                .padding(.top, 4)
         }
         .controlSize(.small)
         .padding(.horizontal, PanelMetrics.padding)

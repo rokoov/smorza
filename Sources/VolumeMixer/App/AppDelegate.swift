@@ -1,14 +1,16 @@
 import AppKit
 
-/// Owns the model, so routing starts at launch rather than when the panel first opens, and takes
-/// the routes down on the way out.
+/// Owns the model and the updater, so routing starts at launch rather than when the panel first
+/// opens, and takes the routes down on the way out.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = MixerModel()
+    let updater = Updater()
     private var signalSources: [DispatchSourceSignal] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         model.start()
+        updater.start()
         quitThroughAppKit(on: [SIGTERM, SIGINT])
     }
 

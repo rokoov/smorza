@@ -18,6 +18,7 @@ process taps that macOS 14.4 and later provide.
   Accessibility permission, asked for when you turn it on)
 - Browsers and Electron apps play sound from helper processes; those fold into their app (Chrome, Safari, Discord)
 - Apps at 100% are never touched. Only apps you turn down or mute go through the mixer
+- Updates itself: checks once a day and asks before installing (Sparkle)
 - Universal app for Apple silicon and Intel Macs
 
 <picture>
@@ -35,7 +36,7 @@ process taps that macOS 14.4 and later provide.
    If you prefer the terminal: `xattr -dr com.apple.quarantine /Applications/VolumeMixer.app`
 3. Click the sliders icon in the menu bar. The first time you turn an app down, macOS asks to let Volume Mixer
    record system audio. Click **Allow**: that is how an app's sound reaches the mixer. Nothing is recorded or
-   saved, and the app makes no network connections.
+   saved. The only network traffic is the update check, which reads the release feed on GitHub.
 
 If you clicked Don't Allow, turn Volume Mixer on under **System Settings → Privacy & Security → Screen & System
 Audio Recording → System Audio Recording Only** and press **Try Again** in the panel. Until then every app plays
@@ -44,6 +45,7 @@ at full volume.
 ## Build from source
 
 Needs macOS 14.4 or later and Swift 5.9 or later. The Command Line Tools are enough (`xcode-select --install`).
+The first build fetches [Sparkle](https://sparkle-project.org) through SwiftPM.
 
 ```sh
 scripts/build.sh            # builds build/VolumeMixer.app for this Mac
@@ -52,6 +54,7 @@ scripts/build.sh install    # copies it to /Applications and launches it
 scripts/format.sh           # formats the code with swift-format
 scripts/check.sh            # formatting, build without warnings, core checks, bundle checks
 scripts/release.sh          # universal app zipped for a release
+scripts/appcast.sh <zip>    # signs a release zip and adds it to the update feed
 ```
 
 The code follows the formatting of Apple's SwiftNIO (`.swift-format`): `scripts/format.sh` applies it and
@@ -77,7 +80,7 @@ disappears, helpers show under their own names.
 | `Sources/VolumeMixer/CoreAudio` | Audio clients, process taps, the capture check, output devices |
 | `Sources/VolumeMixer/Mixer` | `MixerModel`, `RouteManager` and `CaptureCheckController`: what is routed, when and where |
 | `Sources/VolumeMixer/Views` | The menu bar panel, one view per file |
-| `Sources/VolumeMixer/App` | Entry point, app delegate, login item, logging |
+| `Sources/VolumeMixer/App` | Entry point, app delegate, login item, updates, logging |
 | `Checks/MixerCoreChecks` | Checks for `MixerCore`, run by `scripts/check.sh` |
 
 ## Known issues
