@@ -8,16 +8,12 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 swift build -c release --product VolumeMixer
-BIN="$(swift build -c release --show-bin-path)/VolumeMixer"
+source scripts/bundle.sh
 
 APP="build/VolumeMixer.app"
-rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BIN" "$APP/Contents/MacOS/VolumeMixer"
-cp Resources/Info.plist "$APP/Contents/Info.plist"
-cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
-plutil -lint "$APP/Contents/Info.plist" >/dev/null
-codesign --force --sign "${SIGN_IDENTITY:--}" --identifier com.rokoov.volumemixer "$APP"
+staged=$(make_app "$(swift build -c release --show-bin-path)/VolumeMixer")
+sign_app "$staged"
+deliver_app "$staged" "$APP"
 echo "Built $APP"
 
 case "${1:-}" in

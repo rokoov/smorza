@@ -10,24 +10,27 @@ plist=Resources/Info.plist
 version=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$plist")
 minimum=$(/usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" "$plist")
 
+source scripts/bundle.sh
+work=$(mktemp -d "${TMPDIR:-/tmp}/volume-mixer-binary.XXXXXX")
 binaries=()
 for arch in arm64 x86_64; do
     triple="$arch-apple-macosx$minimum"
     swift build -c release --product VolumeMixer --triple "$triple"
-    binaries+=("$(swift build -c release --product VolumeMixer --triple "$triple" --show-bin-path)/VolumeMixer")
+    # Copied at once: some SwiftPM versions put both architectures in the same output folder.
+    cp "$(swift build -c release --product VolumeMixer --triple "$triple" --show-bin-path)/VolumeMixer" \
+        "$work/VolumeMixer-$arch"
+    binaries+=("$work/VolumeMixer-$arch")
 done
+joined="$work/VolumeMixer"
+lipo -create "${binaries[@]}" -output "$joined"
+staged=$(make_app "$joined")
+rm -rf "$work"
+sign_app "$staged"
 
-app=build/release/VolumeMixer.app
-rm -rf build/release
-mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
-lipo -create "${binaries[@]}" -output "$app/Contents/MacOS/VolumeMixer"
-cp "$plist" "$app/Contents/Info.plist"
-cp Resources/AppIcon.icns "$app/Contents/Resources/AppIcon.icns"
-codesign --force --sign - --identifier com.rokoov.volumemixer "$app"
-codesign --verify "$app"
-
+# Zipped from the clean, signed copy, before it lands in a folder that may be synced.
 zip="build/VolumeMixer-$version.zip"
 rm -f "$zip"
-ditto -c -k --keepParent "$app" "$zip"
-lipo -info "$app/Contents/MacOS/VolumeMixer"
+ditto -c -k --norsrc --noextattr --keepParent "$staged" "$zip"
+lipo -info "$staged/Contents/MacOS/VolumeMixer"
+deliver_app "$staged" build/release/VolumeMixer.app
 shasum -a 256 "$zip"
