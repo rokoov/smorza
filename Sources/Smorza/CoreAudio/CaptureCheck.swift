@@ -81,13 +81,13 @@ final class CaptureCheck {
     private func startListening() throws {
         let description = CATapDescription(stereoMixdownOfProcesses: [try Self.ownProcessObject()])
         description.uuid = UUID()
-        description.name = "Volume Mixer capture check"
+        description.name = "Smorza capture check"
         description.isPrivate = true
         description.muteBehavior = .unmuted
         try check(AudioHardwareCreateProcessTap(description, &tapID), "Creating the check tap")
 
         aggregateID = try PrivateAggregateDevice.make(
-            name: "Volume Mixer capture check",
+            name: "Smorza capture check",
             outputDeviceUID: try outputDevice.readString(kAudioDevicePropertyDeviceUID),
             tapUUID: description.uuid
         )

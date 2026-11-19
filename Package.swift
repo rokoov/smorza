@@ -2,7 +2,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "VolumeMixer",
+    name: "Smorza",
     platforms: [.macOS("14.4")],
     dependencies: [
         // Updates. The binary framework is copied into the app by scripts/bundle.sh.
@@ -14,9 +14,9 @@ let package = Package(
             path: "Sources/MixerCore"
         ),
         .executableTarget(
-            name: "VolumeMixer",
+            name: "Smorza",
             dependencies: ["MixerCore", .product(name: "Sparkle", package: "Sparkle")],
-            path: "Sources/VolumeMixer",
+            path: "Sources/Smorza",
             linkerSettings: [
                 .linkedFramework("AudioToolbox"),
                 .linkedFramework("CoreAudio"),

@@ -8,11 +8,11 @@ struct CaptureNotice: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("Volume Mixer can't hear other apps", systemImage: "exclamationmark.triangle.fill")
+            Label("Smorza can't hear other apps", systemImage: "exclamationmark.triangle.fill")
                 .font(.callout.weight(.semibold))
                 .foregroundStyle(.orange)
             Text(
-                "Turn on Volume Mixer under Privacy & Security → Screen & System Audio Recording → System Audio Recording Only, then try again. Until then every app plays at full volume."
+                "Turn on Smorza under Privacy & Security → Screen & System Audio Recording → System Audio Recording Only, then try again. Until then every app plays at full volume."
             )
             .font(.caption)
             .foregroundStyle(.secondary)

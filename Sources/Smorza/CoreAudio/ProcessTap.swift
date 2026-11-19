@@ -119,7 +119,7 @@ final class ProcessTap {
             let description = makeDescription(processObjectIDs, tapUUID: tapUUID)
             try check(AudioHardwareCreateProcessTap(description, &tapID), "Creating the tap")
             aggregateID = try PrivateAggregateDevice.make(
-                name: "Volume Mixer route",
+                name: "Smorza route",
                 outputDeviceUID: outputDeviceUID,
                 tapUUID: tapUUID
             )
@@ -138,7 +138,7 @@ final class ProcessTap {
     private static func makeDescription(_ objectIDs: [AudioObjectID], tapUUID: UUID) -> CATapDescription {
         let description = CATapDescription(stereoMixdownOfProcesses: objectIDs)
         description.uuid = tapUUID
-        description.name = "Volume Mixer route"
+        description.name = "Smorza route"
         description.isPrivate = true
         // Muted rather than mutedWhenTapped: the route stops while the app is idle, and when it
         // starts playing again it should lose a few milliseconds instead of playing them at full volume.

@@ -29,16 +29,16 @@ echo "== core checks"
 
 echo "== app bundle"
 scripts/build.sh >/dev/null
-plist="build/VolumeMixer.app/Contents/Info.plist"
+plist="build/Smorza.app/Contents/Info.plist"
 for key in NSAudioCaptureUsageDescription LSUIElement CFBundleIdentifier SUFeedURL SUPublicEDKey; do
     /usr/libexec/PlistBuddy -c "Print :$key" "$plist" >/dev/null || { echo "Info.plist is missing $key"; exit 1; }
 done
-[[ -d build/VolumeMixer.app/Contents/Frameworks/Sparkle.framework ]] || { echo "Sparkle.framework is missing"; exit 1; }
+[[ -d build/Smorza.app/Contents/Frameworks/Sparkle.framework ]] || { echo "Sparkle.framework is missing"; exit 1; }
 # Checked on a clean copy: in a synced folder iCloud tags files with Finder info at any moment, which
 # strict verification refuses although the signature is intact.
-verify=$(mktemp -d "${TMPDIR:-/tmp}/volume-mixer-verify.XXXXXX")
-ditto --norsrc --noextattr build/VolumeMixer.app "$verify/VolumeMixer.app"
-codesign --verify --deep --strict "$verify/VolumeMixer.app"
+verify=$(mktemp -d "${TMPDIR:-/tmp}/smorza-verify.XXXXXX")
+ditto --norsrc --noextattr build/Smorza.app "$verify/Smorza.app"
+codesign --verify --deep --strict "$verify/Smorza.app"
 rm -rf "$verify"
 xmllint --noout docs/appcast.xml
 echo "All checks passed"

@@ -3,13 +3,13 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key>
-    <string>com.rokoov.volumemixer</string>
+    <string>com.rokoov.smorza</string>
     <key>CFBundleName</key>
-    <string>VolumeMixer</string>
+    <string>Smorza</string>
     <key>CFBundleDisplayName</key>
-    <string>Volume Mixer</string>
+    <string>Smorza</string>
     <key>CFBundleExecutable</key>
-    <string>VolumeMixer</string>
+    <string>Smorza</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundlePackageType</key>
@@ -25,14 +25,14 @@
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>SUFeedURL</key>
-    <string>https://rokoov.github.io/volume-mixer/appcast.xml</string>
+    <string>https://smorza.app/appcast.xml</string>
     <key>SUPublicEDKey</key>
     <string>REPLACE_WITH_YOUR_PUBLIC_ED_KEY</string>
     <key>SUEnableAutomaticChecks</key>
     <true/>
     <key>NSAudioCaptureUsageDescription</key>
-    <string>Volume Mixer plays each app's sound through itself so it can change that app's volume. Nothing is recorded or saved.</string>
+    <string>Smorza plays each app's sound through itself so it can change that app's volume. Nothing is recorded or saved.</string>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Volume Mixer never listens to your microphone. macOS may ask when your headset's microphone is part of the output device.</string>
+    <string>Smorza never listens to your microphone. macOS may ask when your headset's microphone is part of the output device.</string>
 </dict>
 </plist>

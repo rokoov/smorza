@@ -6,7 +6,7 @@ import Foundation
 /// when it exits.
 enum PrivateAggregateDevice {
     /// Every UID starts with this, so the output list can leave the mixer's own devices out.
-    static let uidPrefix = "com.rokoov.volumemixer.route."
+    static let uidPrefix = "com.rokoov.smorza.route."
     /// Frames per IO cycle. A route delays its app by about two cycles plus the device's safety
     /// offsets: 12 ms at 256 frames and 48 kHz, against 23 ms at the usual 512. Measured on an M4
     /// MacBook Air, a route costs about 1.1% of a core in coreaudiod either way.

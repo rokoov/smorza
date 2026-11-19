@@ -1,6 +1,6 @@
 #!/bin/bash
-# Builds a universal (Apple silicon + Intel) VolumeMixer.app and zips it for a GitHub Release.
-#   scripts/release.sh    -> build/VolumeMixer-<version>.zip
+# Builds a universal (Apple silicon + Intel) Smorza.app and zips it for a GitHub Release.
+#   scripts/release.sh    -> build/Smorza-<version>.zip
 #
 #   SIGN_IDENTITY="Developer ID Application: <name> (<team>)" signs with that certificate and the
 #   hardened runtime; without it the app is signed ad hoc and Gatekeeper blocks downloaded copies.
@@ -41,26 +41,26 @@ version=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$plist
 minimum=$(/usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" "$plist")
 
 source scripts/bundle.sh
-work=$(mktemp -d "${TMPDIR:-/tmp}/volume-mixer-binary.XXXXXX")
+work=$(mktemp -d "${TMPDIR:-/tmp}/smorza-binary.XXXXXX")
 binaries=()
 for arch in arm64 x86_64; do
     triple="$arch-apple-macosx$minimum"
-    swift build -c release --product VolumeMixer --triple "$triple"
-    products=$(swift build -c release --product VolumeMixer --triple "$triple" --show-bin-path)
+    swift build -c release --product Smorza --triple "$triple"
+    products=$(swift build -c release --product Smorza --triple "$triple" --show-bin-path)
     # Copied at once: some SwiftPM versions put both architectures in the same output folder.
-    cp -X "$products/VolumeMixer" "$work/VolumeMixer-$arch"
-    binaries+=("$work/VolumeMixer-$arch")
+    cp -X "$products/Smorza" "$work/Smorza-$arch"
+    binaries+=("$work/Smorza-$arch")
     # Sparkle ships one universal framework, the same for both builds.
     sparkle="$products/Sparkle.framework"
 done
-joined="$work/VolumeMixer"
+joined="$work/Smorza"
 lipo -create "${binaries[@]}" -output "$joined"
 staged=$(make_app "$joined" "$sparkle")
 rm -rf "$work"
 sign_app "$staged"
 
 # Zipped from the clean, signed copy, before it lands in a folder that may be synced.
-zip="build/VolumeMixer-$version.zip"
+zip="build/Smorza-$version.zip"
 rm -f "$zip"
 ditto -c -k --norsrc --noextattr --keepParent "$staged" "$zip"
 if [[ -n "${NOTARY_PROFILE:-}" ]]; then
@@ -73,6 +73,6 @@ if [[ -n "${NOTARY_PROFILE:-}" ]]; then
 elif [[ -n "${SIGN_IDENTITY:-}" ]]; then
     echo "Not notarized: Gatekeeper blocks downloaded copies until it is (set NOTARY_PROFILE)" >&2
 fi
-lipo -info "$staged/Contents/MacOS/VolumeMixer" "$staged/Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle"
-deliver_app "$staged" build/release/VolumeMixer.app
+lipo -info "$staged/Contents/MacOS/Smorza" "$staged/Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle"
+deliver_app "$staged" build/release/Smorza.app
 shasum -a 256 "$zip"

@@ -16,6 +16,7 @@ enum Entry {
                 return
             }
         }
-        VolumeMixerApp.main()
+        FormerName.adoptSettings()
+        SmorzaApp.main()
     }
 }

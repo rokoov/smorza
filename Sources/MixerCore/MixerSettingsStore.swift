@@ -32,8 +32,16 @@ public final class MixerSettingsStore {
     public private(set) var profiles: [Profile] = []
     private var isReadOnly = false
 
-    /// `legacyKey` holds the version 1 format (one volume per app), migrated on first load.
-    public init(defaults: UserDefaults = .standard, key: String = "Settings", legacyKey: String = "AppVolumes") {
+    /// Where the settings live in the app's own defaults.
+    public static let standardKey = "Settings"
+    /// The version 1 format (one volume per app), migrated on first load.
+    public static let standardLegacyKey = "AppVolumes"
+
+    public init(
+        defaults: UserDefaults = .standard,
+        key: String = MixerSettingsStore.standardKey,
+        legacyKey: String = MixerSettingsStore.standardLegacyKey
+    ) {
         self.defaults = defaults
         self.key = key
         if let data = defaults.data(forKey: key), let saved = try? JSONDecoder().decode(Saved.self, from: data) {
