@@ -4,3 +4,6 @@ build/
 xcuserdata/
 *.xcodeproj/
 .DS_Store
+
+# iCloud Drive conflict copies ("File 2.swift") when the repo lives in a synced folder
+* [0-9].*

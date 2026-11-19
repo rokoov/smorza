@@ -16,11 +16,20 @@ func color(_ hex: UInt32, _ alpha: CGFloat = 1) -> NSColor {
 }
 
 func render(pixels: Int) -> Data {
-    guard let rep = NSBitmapImageRep(
-        bitmapDataPlanes: nil, pixelsWide: pixels, pixelsHigh: pixels,
-        bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
-        colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
-    ) else { fatalError("bitmap") }
+    guard
+        let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: pixels,
+            pixelsHigh: pixels,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        )
+    else { fatalError("bitmap") }
     NSGraphicsContext.saveGraphicsState()
     NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
 
@@ -33,7 +42,12 @@ func render(pixels: Int) -> Data {
     // Soft highlight over the top of the tile.
     NSGraphicsContext.current?.saveGraphicsState()
     tilePath.addClip()
-    let highlight = NSRect(x: tile.minX, y: tile.midY + tile.height * 0.08, width: tile.width, height: tile.height * 0.42)
+    let highlight = NSRect(
+        x: tile.minX,
+        y: tile.midY + tile.height * 0.08,
+        width: tile.width,
+        height: tile.height * 0.42
+    )
     NSGradient(starting: color(0xFFFFFF, 0), ending: color(0xFFFFFF, 0.18))?.draw(in: highlight, angle: 90)
     NSGraphicsContext.current?.restoreGraphicsState()
 
@@ -44,14 +58,23 @@ func render(pixels: Int) -> Data {
     let positions: [CGFloat] = [0.7, 0.35, 0.55]
     for (index, position) in positions.enumerated() {
         let centerX = tile.minX + tile.width * (0.26 + 0.24 * CGFloat(index))
-        let trackRect = NSRect(x: centerX - trackWidth / 2, y: tile.midY - trackHeight / 2, width: trackWidth, height: trackHeight)
+        let trackRect = NSRect(
+            x: centerX - trackWidth / 2,
+            y: tile.midY - trackHeight / 2,
+            width: trackWidth,
+            height: trackHeight
+        )
         color(0xFFFFFF, 0.28).setFill()
         NSBezierPath(roundedRect: trackRect, xRadius: trackWidth / 2, yRadius: trackWidth / 2).fill()
 
         let knobY = trackRect.minY + trackHeight * position - knobHeight / 2
         let knobRect = NSRect(x: centerX - knobWidth / 2, y: knobY, width: knobWidth, height: knobHeight)
         color(0x000000, 0.22).setFill()
-        NSBezierPath(roundedRect: knobRect.offsetBy(dx: 0, dy: -size * 0.008), xRadius: knobHeight / 2, yRadius: knobHeight / 2).fill()
+        NSBezierPath(
+            roundedRect: knobRect.offsetBy(dx: 0, dy: -size * 0.008),
+            xRadius: knobHeight / 2,
+            yRadius: knobHeight / 2
+        ).fill()
         color(0xFFFFFF).setFill()
         NSBezierPath(roundedRect: knobRect, xRadius: knobHeight / 2, yRadius: knobHeight / 2).fill()
     }

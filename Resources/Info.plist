@@ -3,30 +3,36 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key>
-    <string>com.rokoov.volumemixer</string>
+    <string>com.rokoov.smorza</string>
     <key>CFBundleName</key>
-    <string>VolumeMixer</string>
+    <string>Smorza</string>
     <key>CFBundleDisplayName</key>
-    <string>Volume Mixer</string>
+    <string>Smorza</string>
     <key>CFBundleExecutable</key>
-    <string>VolumeMixer</string>
+    <string>Smorza</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>0.1.0</string>
+    <string>0.2.1</string>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>3</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.4</string>
     <key>LSUIElement</key>
     <true/>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>SUFeedURL</key>
+    <string>https://smorza.app/appcast.xml</string>
+    <key>SUPublicEDKey</key>
+    <string>Q3+j55KCXAVBI7TtPh+6JAegCSlMSQGc3TeFFCro3JU=</string>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
     <key>NSAudioCaptureUsageDescription</key>
-    <string>Volume Mixer plays each app's sound through itself so it can change that app's volume. Nothing is recorded or saved.</string>
+    <string>Smorza plays each app's sound through itself so it can change that app's volume. Nothing is recorded or saved.</string>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Volume Mixer never listens to your microphone. macOS may ask when your headset's microphone is part of the output device.</string>
+    <string>Smorza never listens to your microphone. macOS may ask when your headset's microphone is part of the output device.</string>
 </dict>
 </plist>

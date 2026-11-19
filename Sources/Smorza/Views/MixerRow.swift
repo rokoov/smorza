@@ -1,0 +1,62 @@
+import SwiftUI
+
+/// Icon, name and level on top, the slider below, mute on the right. The output device uses the
+/// same layout so every slider, level and mute button lines up in one column.
+struct MixerRow<Icon: View, Accessory: View, Meter: View>: View {
+    let title: String
+    let level: String
+    /// Slider position, 0...1.
+    let position: Double
+    /// The volume the position stands for, which picks the speaker symbol.
+    let volume: Double
+    /// Where 100% sits on a slider that goes past it; nil draws no mark.
+    var unityMark: Double?
+    /// Colour of the level text: orange for boost, the accent for solo.
+    var levelStyle = AnyShapeStyle(.secondary)
+    let isMuted: Bool
+    let isEnabled: Bool
+    let onChange: (Double) -> Void
+    let onToggleMute: () -> Void
+    var onSolo: (() -> Void)?
+    /// Sits before the mute button: an app's output menu, nothing for the device row.
+    let accessory: Accessory
+    /// Drawn along the bottom of the slider: a routed app's live level, nothing otherwise.
+    let meter: Meter
+    @ViewBuilder let icon: () -> Icon
+
+    var body: some View {
+        HStack(spacing: 10) {
+            icon()
+                .frame(width: PanelMetrics.iconSize, height: PanelMetrics.iconSize)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(title)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    Spacer(minLength: 8)
+                    Text(level)
+                        .font(.caption)
+                        .monospacedDigit()
+                        .foregroundStyle(levelStyle)
+                }
+                Slider(value: Binding(get: { position }, set: onChange), in: 0...1)
+                    .controlSize(.small)
+                    .background {
+                        if let unityMark {
+                            UnityMark(position: unityMark)
+                        }
+                    }
+                    .overlay(alignment: .bottom) { meter }
+                    .disabled(!isEnabled)
+                    .opacity(isMuted ? 0.45 : 1)
+                    .accessibilityValue(level)
+                    .help(unityMark == nil ? "" : "Past the mark boosts above 100%")
+            }
+            accessory
+            MuteButton(isMuted: isMuted, volume: volume, onSolo: onSolo, action: onToggleMute)
+        }
+        .frame(minHeight: PanelMetrics.rowHeight)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(title)
+    }
+}
