@@ -25,6 +25,18 @@ enum PrivateAggregateDevice {
         return deviceID
     }
 
+    /// Where the tap's stream sits among the aggregate device's input streams: last, after any inputs
+    /// of the output device (a headset microphone). Counted on the aggregate itself, because an output
+    /// device that is an aggregate does not pass all of its inputs on.
+    static func tapStreamIndex(of aggregateID: AudioObjectID) throws -> Int {
+        let taps = (try? aggregateID.readObjectIDs(kAudioAggregateDevicePropertySubTapList)) ?? []
+        let inputs = aggregateID.streamCount(scope: kAudioObjectPropertyScopeInput)
+        guard !taps.isEmpty, inputs > 0 else {
+            throw CoreAudioError(operation: "Finding the tap's stream", status: kAudioHardwareUnspecifiedError)
+        }
+        return inputs - 1
+    }
+
     /// Marks the output device's own input streams (a headset microphone) unused for one IO
     /// callback. They come before the tap's stream, and leaving them on would open the microphone
     /// or drop Bluetooth headphones to call quality.

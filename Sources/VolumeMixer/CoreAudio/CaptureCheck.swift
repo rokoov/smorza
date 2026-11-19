@@ -86,18 +86,18 @@ final class CaptureCheck {
         description.muteBehavior = .unmuted
         try check(AudioHardwareCreateProcessTap(description, &tapID), "Creating the check tap")
 
-        let deviceInputStreams = outputDevice.streamCount(scope: kAudioObjectPropertyScopeInput)
         aggregateID = try PrivateAggregateDevice.make(
             name: "Volume Mixer capture check",
             outputDeviceUID: try outputDevice.readString(kAudioDevicePropertyDeviceUID),
             tapUUID: description.uuid
         )
+        let tapStreamIndex = try PrivateAggregateDevice.tapStreamIndex(of: aggregateID)
 
         let heard = heard
         let status = AudioDeviceCreateIOProcIDWithBlock(&listenProcID, aggregateID, nil) { _, input, _, output, _ in
             let inputs = UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: input))
             if !inputs.isEmpty {
-                let tap = inputs[min(deviceInputStreams, inputs.count - 1)]
+                let tap = inputs[min(tapStreamIndex, inputs.count - 1)]
                 if let data = tap.mData {
                     let samples = data.assumingMemoryBound(to: Float.self)
                     for index in 0..<(Int(tap.mDataByteSize) / MemoryLayout<Float>.size) where samples[index] != 0 {
@@ -114,7 +114,7 @@ final class CaptureCheck {
         }
         try check(status, "Creating the check callback")
         if let listenProcID {
-            PrivateAggregateDevice.ignoreInputStreams(deviceInputStreams, of: aggregateID, procID: listenProcID)
+            PrivateAggregateDevice.ignoreInputStreams(tapStreamIndex, of: aggregateID, procID: listenProcID)
         }
         try check(AudioDeviceStart(aggregateID, listenProcID), "Starting the check")
     }

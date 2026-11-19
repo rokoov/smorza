@@ -99,8 +99,6 @@ disappears, helpers show under their own names.
 - A turned-down app that was idle starts a few milliseconds late when it plays again
 - An app sent to a device in the mixer plays there even if the app picked another device in its own settings;
   one left on the system default but turned down follows the system default the same way
-- An aggregate device that includes a microphone (made in Audio MIDI Setup) does not work as an output yet: a
-  turned-down app that plays there stays silent. Pick the real device instead
 - Other audio routing tools (Background Music, SoundSource, Loopback) can fight over the same apps
 - Builds you make yourself are signed ad hoc, so macOS may ask for the permissions again after each build
 
