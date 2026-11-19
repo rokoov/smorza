@@ -22,6 +22,8 @@ final class MixerModel {
     /// The app playing solo, with every other app in the mixer muted.
     private(set) var solo: SoloSession?
     let output = SystemOutput()
+    /// How far the sliders go: to 100%, or to 200% where boost is on.
+    let volumeScale = ProFeatures.volumeScale
     let volumeKeys = VolumeKeys()
     /// Off only for the `--snapshot` previews, which must never touch anyone's audio.
     @ObservationIgnored var routesAudio = true
@@ -98,7 +100,7 @@ final class MixerModel {
 
     func setVolume(_ volume: Double, for key: String) {
         var setting = store.volume(for: key, on: outputDeviceUID(for: key))
-        setting.volume = min(max(volume, 0), VolumeCurve.maximum)
+        setting.volume = volumeScale.clamped(volume)
         apply(setting, to: key)
     }
 
@@ -193,13 +195,14 @@ final class MixerModel {
             appKey != Bundle.main.bundleIdentifier
         else { return }
         var setting = store.volume(for: appKey, on: outputDeviceUID(for: appKey))
+        setting.volume = volumeScale.clamped(setting.volume)
         switch key {
         case .up:
             // Like the system volume, raising it also unmutes.
-            setting.volume = VolumeCurve.stepped(setting.volume, by: 1, fine: isFine)
+            setting.volume = volumeScale.stepped(setting.volume, by: 1, fine: isFine)
             setting.isMuted = false
         case .down:
-            setting.volume = VolumeCurve.stepped(setting.volume, by: -1, fine: isFine)
+            setting.volume = volumeScale.stepped(setting.volume, by: -1, fine: isFine)
         case .mute:
             endSolo(restoring: false)
             setting.isMuted.toggle()
@@ -210,7 +213,8 @@ final class MixerModel {
                 name: app.localizedName ?? appKey,
                 icon: app.icon ?? NSImage(),
                 volume: setting.volume,
-                isMuted: setting.isMuted
+                isMuted: setting.isMuted,
+                scale: volumeScale
             )
         )
     }
@@ -223,10 +227,15 @@ final class MixerModel {
         )
     }
 
-    /// The first nine profiles answer to Control-Option-1 to 9.
+    /// The first nine profiles answer to Control-Option-1 to 9. Without Pro the saved profiles stay
+    /// untouched but hidden, with no shortcuts.
     private func profilesChanged() {
-        profiles = store.profiles
         hotKeys.unregisterAll()
+        guard ProFeatures.isProfilesEnabled else {
+            profiles = []
+            return
+        }
+        profiles = store.profiles
         var shortcuts = 0
         for (index, profile) in profiles.prefix(9).enumerated() {
             let isRegistered = hotKeys.registerControlOption(number: index + 1) { [weak self] in
@@ -312,10 +321,13 @@ final class MixerModel {
             let settings = store.settings(for: key)
             let chosen = settings.outputDeviceUID.flatMap(output.device(withUID:))
             let device = chosen ?? output.device(withUID: output.deviceUID)
+            var volume = settings.volume(on: chosen?.uid ?? output.deviceUID)
+            volume.volume = volumeScale.clamped(volume.volume)
             return AppAudio(
                 identity: identity,
                 clients: clientsByKey[key, default: []],
                 settings: settings,
+                volume: volume,
                 chosenDevice: chosen,
                 outputDeviceID: chosen?.id ?? output.deviceID,
                 outputDeviceUID: chosen?.uid ?? output.deviceUID,

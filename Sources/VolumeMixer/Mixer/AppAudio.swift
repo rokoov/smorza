@@ -7,6 +7,8 @@ struct AppAudio {
     let identity: AppIdentity
     let clients: [AudioClient]
     let settings: AppSettings
+    /// The volume on the device the app plays on now, brought onto this build's scale.
+    let volume: AppVolume
     /// The device the user picked for the app, while it is connected.
     let chosenDevice: OutputDevice?
     /// Where the app plays now: the picked device if connected, otherwise the system output.
@@ -19,6 +21,5 @@ struct AppAudio {
     var key: String { identity.key }
     var isPlaying: Bool { clients.contains(where: \.isPlaying) }
     var processObjectIDs: [AudioObjectID] { clients.map(\.objectID).sorted() }
-    var volume: AppVolume { settings.volume(on: outputDeviceUID) }
     var needsRoute: Bool { volume.needsRouting || isRedirected }
 }

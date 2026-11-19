@@ -40,7 +40,7 @@ struct MixerPanel: View {
                 Divider()
                 OutputPicker(output: model.output)
             }
-            if isSavingProfile {
+            if ProFeatures.isProfilesEnabled, isSavingProfile {
                 Divider()
                 ProfileEditor(
                     onSave: { name, mutesOtherApps in
@@ -95,6 +95,7 @@ struct MixerPanel: View {
             ForEach(model.entries) { entry in
                 AppRow(
                     entry: entry,
+                    scale: model.volumeScale,
                     devices: model.output.devices,
                     systemOutputName: model.output.name,
                     onVolume: { model.setVolume($0, for: entry.id) },
@@ -123,12 +124,14 @@ struct MixerPanel: View {
                 Toggle("Open at login", isOn: Binding(get: { loginItem.isEnabled }, set: { loginItem.setEnabled($0) }))
                     .toggleStyle(.checkbox)
                 Spacer()
-                ProfilesMenu(
-                    profiles: model.profiles,
-                    onApply: model.applyProfile,
-                    onSave: { isSavingProfile = true },
-                    onDelete: model.deleteProfile
-                )
+                if ProFeatures.isProfilesEnabled {
+                    ProfilesMenu(
+                        profiles: model.profiles,
+                        onApply: model.applyProfile,
+                        onSave: { isSavingProfile = true },
+                        onDelete: model.deleteProfile
+                    )
+                }
                 Button("Quit") { NSApp.terminate(nil) }
                     .keyboardShortcut("q")
             }

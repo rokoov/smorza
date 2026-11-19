@@ -4,6 +4,7 @@ import SwiftUI
 /// An app's row. A dimmed, grey icon means the app is quiet right now; an orange level means boost.
 struct AppRow: View {
     let entry: MixerEntry
+    let scale: VolumeScale
     let devices: [OutputDevice]
     let systemOutputName: String
     let onVolume: (Double) -> Void
@@ -15,9 +16,9 @@ struct AppRow: View {
         MixerRow(
             title: entry.name,
             level: level,
-            position: VolumeCurve.position(of: entry.volume),
+            position: scale.position(of: entry.volume),
             volume: entry.volume,
-            unityMark: VolumeCurve.unityPosition,
+            unityMark: scale.allowsBoost ? scale.unityPosition : nil,
             levelStyle: levelStyle,
             isMuted: entry.isMuted,
             isEnabled: true,
@@ -57,6 +58,6 @@ struct AppRow: View {
     }
 
     private func setPosition(_ position: Double) {
-        onVolume(VolumeCurve.volume(atPosition: position))
+        onVolume(scale.volume(atPosition: position))
     }
 }

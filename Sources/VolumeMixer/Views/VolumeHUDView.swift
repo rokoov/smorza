@@ -7,6 +7,7 @@ struct VolumeHUDView: View {
     let icon: NSImage
     let volume: Double
     let isMuted: Bool
+    let scale: VolumeScale
 
     private let width: CGFloat = 260
     private let cornerRadius: CGFloat = 14
@@ -27,7 +28,11 @@ struct VolumeHUDView: View {
                         .monospacedDigit()
                         .foregroundStyle(isMuted ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
                 }
-                LevelBar(position: VolumeCurve.position(of: volume), isMuted: isMuted)
+                LevelBar(
+                    position: scale.position(of: volume),
+                    unityMark: scale.allowsBoost ? scale.unityPosition : nil,
+                    isMuted: isMuted
+                )
             }
         }
         .padding(.horizontal, 14)
@@ -38,9 +43,10 @@ struct VolumeHUDView: View {
     }
 }
 
-/// A read-only level bar with a tick where 100% sits.
+/// A read-only level bar, with a tick where 100% sits when the scale goes past it.
 private struct LevelBar: View {
     let position: Double
+    let unityMark: Double?
     let isMuted: Bool
 
     private let height: CGFloat = 5
@@ -53,10 +59,12 @@ private struct LevelBar: View {
                 Capsule()
                     .fill(isMuted ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tint))
                     .frame(width: proxy.size.width * position)
-                Capsule()
-                    .fill(Color.secondary)
-                    .frame(width: 2, height: height + 4)
-                    .offset(x: proxy.size.width * VolumeCurve.unityPosition - 1)
+                if let unityMark {
+                    Capsule()
+                        .fill(Color.secondary)
+                        .frame(width: 2, height: height + 4)
+                        .offset(x: proxy.size.width * unityMark - 1)
+                }
             }
         }
         .frame(height: height)
