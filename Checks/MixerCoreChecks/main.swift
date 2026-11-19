@@ -394,5 +394,36 @@ do {
     expect(free.stepped(1, by: 1, fine: false) == 1, "presses stop at 100% without boost")
 }
 
+// Per-app output: older saves decode, and the routing rule covers volume, mute and device.
+do {
+    let decoder = JSONDecoder()
+    let beforeDevices = try decoder.decode(
+        AppSettings.self,
+        from: Data(#"{"volumes":{"speakers":{"volume":0.4,"isMuted":false}}}"#.utf8)
+    )
+    expect(beforeDevices.outputDeviceUID == nil, "a save from before per-app output follows the system output")
+    expect(beforeDevices.volume(on: "speakers").volume == 0.4, "its volumes still load")
+    let bare = try decoder.decode(AppSettings.self, from: Data(#"{"lastVolume":{"volume":0.7,"isMuted":true}}"#.utf8))
+    expect(bare.volumes.isEmpty && bare.lastVolume?.isMuted == true, "a save without per-device volumes loads too")
+
+    let connected: Set = ["speakers", "airpods"]
+    func routes(_ settings: AppSettings, system: String = "speakers", on devices: Set<String> = connected) -> Bool {
+        settings.needsRoute(systemOutputUID: system, connectedUIDs: devices, scale: .standard)
+    }
+    expect(!routes(AppSettings()), "an untouched app plays directly")
+    expect(routes(AppSettings(lastVolume: AppVolume(volume: 0.5))), "a turned-down app is routed")
+    expect(routes(AppSettings(lastVolume: AppVolume(isMuted: true))), "a muted app is routed")
+    let sent = AppSettings(outputDeviceUID: "airpods", outputDeviceName: "AirPods Pro")
+    expect(routes(sent), "an app sent to another device is routed even at 100%")
+    expect(!routes(sent, system: "airpods"), "sent to the system output itself, it plays untouched")
+    expect(!routes(sent, on: ["speakers"]), "with its device unplugged it falls back and plays untouched")
+    expect(
+        sent.outputDeviceUID(systemOutputUID: "speakers", connectedUIDs: ["speakers"]) == "speakers",
+        "an unplugged device sends the app to the system output"
+    )
+    expect(!routes(AppSettings(lastVolume: AppVolume(volume: 1.5))), "a Pro boost plays untouched on the free scale")
+    expect(!sent.isDefault, "a chosen device is worth keeping even at 100%")
+}
+
 print("\(passed) passed, \(failures) failed")
 exit(failures == 0 ? 0 : 1)

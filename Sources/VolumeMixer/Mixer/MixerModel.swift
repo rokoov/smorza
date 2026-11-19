@@ -52,6 +52,7 @@ final class MixerModel {
     func start() {
         monitor.onChange = { [weak self] in self?.clientsChanged() }
         output.onDeviceChange = { [weak self] in self?.outputDeviceChanged() }
+        output.onDevicesChange = { [weak self] in self?.outputDevicesChanged() }
         capture.onFinish = { [weak self] in self?.syncRoutes() }
         routes.onRetry = { [weak self] in self?.syncRoutes() }
         routes.onRoutesChanged = { [weak self] in self?.updateBackgroundWork() }
@@ -317,29 +318,37 @@ final class MixerModel {
             clientsByKey[identity.key, default: []].append(client)
             identityByKey[identity.key] = identity
         }
+        let connected = Set(output.devices.map(\.uid))
         return identityByKey.map { key, identity in
             let settings = store.settings(for: key)
-            let chosen = settings.outputDeviceUID.flatMap(output.device(withUID:))
-            let device = chosen ?? output.device(withUID: output.deviceUID)
-            var volume = settings.volume(on: chosen?.uid ?? output.deviceUID)
+            let deviceUID = settings.outputDeviceUID(systemOutputUID: output.deviceUID, connectedUIDs: connected)
+            let device = output.device(withUID: deviceUID)
+            var volume = settings.volume(on: deviceUID)
             volume.volume = volumeScale.clamped(volume.volume)
             return AppAudio(
                 identity: identity,
                 clients: clientsByKey[key, default: []],
                 settings: settings,
                 volume: volume,
-                chosenDevice: chosen,
-                outputDeviceID: chosen?.id ?? output.deviceID,
-                outputDeviceUID: chosen?.uid ?? output.deviceUID,
+                chosenDevice: settings.outputDeviceUID.flatMap(output.device(withUID:)),
+                outputDeviceID: device?.id ?? output.deviceID,
+                outputDeviceUID: deviceUID,
                 outputSymbol: device?.symbolName ?? output.symbolName,
-                isRedirected: chosen.map { $0.id != output.deviceID } ?? false
+                needsRoute: settings.needsRoute(
+                    systemOutputUID: output.deviceUID,
+                    connectedUIDs: connected,
+                    scale: volumeScale
+                )
             )
         }
     }
 
     /// Where the app plays now: its picked device while connected, otherwise the system output.
     private func outputDeviceUID(for key: String) -> String {
-        store.settings(for: key).outputDeviceUID.flatMap(output.device(withUID:))?.uid ?? output.deviceUID
+        store.settings(for: key).outputDeviceUID(
+            systemOutputUID: output.deviceUID,
+            connectedUIDs: Set(output.devices.map(\.uid))
+        )
     }
 
     private func rebuildEntries(from apps: [AppAudio]) {
@@ -382,6 +391,13 @@ final class MixerModel {
     private func outputDeviceChanged() {
         capture.outputDeviceChanged(to: output.deviceID)
         // Routes still on the old device are replaced by the next sync.
+        syncRoutes()
+    }
+
+    /// A device came or went: apps sent to it move there or fall back to the system output. Only
+    /// routes whose device changed are rebuilt, each new one starting before the old one goes.
+    private func outputDevicesChanged() {
+        log.notice("Output devices changed: \(self.output.devices.count) connected")
         syncRoutes()
     }
 

@@ -11,6 +11,7 @@ struct AppRow: View {
     let onToggleMute: () -> Void
     let onSolo: () -> Void
     let onChooseOutput: (OutputDevice?) -> Void
+    @State private var isHovered = false
 
     var body: some View {
         MixerRow(
@@ -29,6 +30,7 @@ struct AppRow: View {
                 entry: entry,
                 devices: devices,
                 systemOutputName: systemOutputName,
+                isRevealed: isHovered,
                 onChoose: onChooseOutput
             )
         ) {
@@ -39,9 +41,19 @@ struct AppRow: View {
                 .opacity(entry.isPlaying ? 1 : 0.6)
                 .help(entry.isPlaying ? "Playing" : "Quiet right now")
         }
+        .onHover { isHovered = $0 }
         .contextMenu {
             Button(entry.isSolo ? "End Solo" : "Play Solo", action: onSolo)
             Button(entry.isMuted ? "Unmute" : "Mute", action: onToggleMute)
+            Divider()
+            Menu("Output") {
+                AppOutputChoices(
+                    entry: entry,
+                    devices: devices,
+                    systemOutputName: systemOutputName,
+                    onChoose: onChooseOutput
+                )
+            }
         }
     }
 

@@ -83,8 +83,8 @@ disappears, helpers show under their own names.
 ## Known issues
 
 - A turned-down app that was idle starts a few milliseconds late when it plays again
-- While an app is routed its sound plays on the device chosen in the mixer (or the system output), even if the
-  app picked another device in its own settings
+- An app sent to a device in the mixer plays there even if the app picked another device in its own settings;
+  one left on the system default but turned down follows the system default the same way
 - Other audio routing tools (Background Music, SoundSource, Loopback) can fight over the same apps
 - macOS may ask for the permissions again after an update, since the app is not signed with a Developer ID
 
