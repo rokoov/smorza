@@ -12,6 +12,8 @@ struct AppRow: View {
     let onToggleMute: () -> Void
     let onSolo: () -> Void
     let onChooseOutput: (OutputDevice?) -> Void
+    /// Tells the panel which row the pointer is over, for scrolling.
+    let onHover: (Bool) -> Void
     @State private var isHovered = false
 
     var body: some View {
@@ -43,7 +45,10 @@ struct AppRow: View {
                 .opacity(entry.isPlaying ? 1 : 0.6)
                 .help(entry.isPlaying ? "Playing" : "Quiet right now")
         }
-        .onHover { isHovered = $0 }
+        .onHover { isInside in
+            isHovered = isInside
+            onHover(isInside)
+        }
         .contextMenu {
             Button(entry.isSolo ? "End Solo" : "Play Solo", action: onSolo)
             Button(entry.isMuted ? "Unmute" : "Mute", action: onToggleMute)

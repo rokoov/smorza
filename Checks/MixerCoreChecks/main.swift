@@ -437,5 +437,23 @@ do {
     expect(LevelMeter.next(from: 0.03, toward: 0) == 0, "and stops at the new level, never below it")
 }
 
+// Scrolling over a row: up or right turns the volume up, whatever the scroll direction setting.
+do {
+    func change(x: Double = 0, y: Double = 0, precise: Bool = true, inverted: Bool = false) -> Double {
+        ScrollStep.positionChange(deltaX: x, deltaY: y, isPrecise: precise, isInverted: inverted)
+    }
+    expect(change(y: 1, precise: false) == 0.05, "one wheel notch up is 5% more")
+    expect(change(y: -1, precise: false) == -0.05, "one notch down is 5% less")
+    expect(change(y: 10, precise: false) == ScrollStep.maximum, "an accelerated wheel moves at most 10% at once")
+    expect(change(y: 20) > 0, "fingers up with classic scrolling turns it up")
+    expect(change(y: -20, inverted: true) > 0, "fingers up with natural scrolling turns it up too")
+    expect(change(x: -20) > 0, "fingers to the right with classic scrolling turn it up")
+    expect(change(x: 20, inverted: true) > 0, "fingers to the right with natural scrolling turn it up too")
+    expect(abs(change(y: 20) - 0.1) < 1e-9, "20 points of trackpad are 10%")
+    expect(change(x: 1, y: 5) == change(y: 5), "the larger of the two directions decides")
+    expect(ScrollStep.keyChange(isUp: true, isFine: false) == 0.05, "an arrow key moves 5%")
+    expect(ScrollStep.keyChange(isUp: false, isFine: true) == -0.01, "with Shift it moves 1%")
+}
+
 print("\(passed) passed, \(failures) failed")
 exit(failures == 0 ? 0 : 1)

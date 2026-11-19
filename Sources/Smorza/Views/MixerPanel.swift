@@ -1,4 +1,5 @@
 import AppKit
+import MixerCore
 import SwiftUI
 
 /// The menu bar panel: the output volume, a row per app, the output devices and the footer.
@@ -8,11 +9,17 @@ struct MixerPanel: View {
     @State private var isSavingProfile = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.openSettings) private var openSettings
+    /// The row under the pointer, which scrolling turns up or down.
+    @State private var hoveredRow: String?
+    @State private var scrollMonitor = RowScrollMonitor()
+    /// Stands for the output device's row among the app rows' keys.
+    private static let outputRowID = "output-device"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             OutputRow(output: model.output)
                 .padding(PanelMetrics.padding)
+                .onHover { hover(Self.outputRowID, isInside: $0) }
             Divider()
             if model.captureState == .blocked || (model.captureState == .checking && model.wasCaptureBlocked) {
                 CaptureNotice(isRetrying: model.captureState == .checking, onRetry: model.retryCaptureCheck)
@@ -60,7 +67,10 @@ struct MixerPanel: View {
             WindowVisibilityReader { isVisible in
                 if isVisible {
                     model.panelDidAppear()
+                    scrollMonitor.start(scroll)
                 } else {
+                    scrollMonitor.stop()
+                    hoveredRow = nil
                     model.panelDidDisappear()
                 }
             }
@@ -102,12 +112,46 @@ struct MixerPanel: View {
                     onVolume: { model.setVolume($0, for: entry.id) },
                     onToggleMute: { model.toggleMute(for: entry.id) },
                     onSolo: { model.toggleSolo(for: entry.id) },
-                    onChooseOutput: { model.setOutputDevice($0, for: entry.id) }
+                    onChooseOutput: { model.setOutputDevice($0, for: entry.id) },
+                    onHover: { hover(entry.id, isInside: $0) }
                 )
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
         .padding(PanelMetrics.padding)
+    }
+
+    private func hover(_ row: String, isInside: Bool) {
+        if isInside {
+            hoveredRow = row
+        } else if hoveredRow == row {
+            hoveredRow = nil
+        }
+    }
+
+    /// Scrolling over a row changes its volume. In a list long enough to scroll, scrolling up and
+    /// down moves the list, and sideways scrolling still changes the volume.
+    private func scroll(_ event: NSEvent) -> Bool {
+        guard let row = hoveredRow else { return false }
+        let isVertical = abs(event.scrollingDeltaY) >= abs(event.scrollingDeltaX)
+        if isVertical, row != Self.outputRowID, model.entries.count > PanelMetrics.visibleRows {
+            return false
+        }
+        // Momentum after the fingers lift would keep turning it.
+        guard event.momentumPhase.isEmpty else { return true }
+        let change = ScrollStep.positionChange(
+            deltaX: Double(event.scrollingDeltaX),
+            deltaY: Double(event.scrollingDeltaY),
+            isPrecise: event.hasPreciseScrollingDeltas,
+            isInverted: event.isDirectionInvertedFromDevice
+        )
+        guard change != 0 else { return true }
+        if row == Self.outputRowID {
+            model.output.setVolume(model.output.volume + change)
+        } else {
+            model.nudgeVolume(of: row, byPosition: change)
+        }
+        return true
     }
 
     /// Rows fade out under the scroll edges instead of being cut off.

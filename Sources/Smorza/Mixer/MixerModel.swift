@@ -112,6 +112,13 @@ final class MixerModel {
         apply(setting, to: key)
     }
 
+    /// Moves an app's slider by `change` of its length, for scrolling over its row.
+    func nudgeVolume(of key: String, byPosition change: Double) {
+        let current = volumeScale.clamped(store.volume(for: key, on: outputDeviceUID(for: key)).volume)
+        let position = min(max(volumeScale.position(of: current) + change, 0), 1)
+        setVolume(volumeScale.volume(atPosition: position), for: key)
+    }
+
     func toggleMute(for key: String) {
         // Muting by hand takes over from a solo, whose saved mutes no longer apply.
         endSolo(restoring: false)
