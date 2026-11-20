@@ -19,6 +19,8 @@ process taps that macOS 14.4 and later provide. Smorza was called Volume Mixer u
 - Scroll over a row to change its volume; a focused slider moves 5% with the arrow keys, 1% with Shift. Every
   slider and button has a VoiceOver label
 - Option-click an app's speaker to play it solo; Option-click again to bring the others back
+- Mute All, from the panel or with Control-Option-M anywhere (change it in Settings); pressing it again gives
+  every app its own mute back
 - The volume keys can change the app in front instead of the whole Mac, with a small overlay showing its level;
   Option + the keys still change the Mac's volume (needs the Accessibility permission, asked for when you turn
   it on in Settings)
@@ -60,7 +62,8 @@ at full volume.
 ## Build from source
 
 Needs macOS 14.4 or later and Swift 5.9 or later. The Command Line Tools are enough (`xcode-select --install`).
-The first build fetches [Sparkle](https://sparkle-project.org) through SwiftPM.
+The first build fetches [Sparkle](https://sparkle-project.org) and
+[KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts) through SwiftPM.
 
 ```sh
 scripts/build.sh            # builds build/Smorza.app for this Mac

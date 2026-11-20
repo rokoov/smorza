@@ -1,6 +1,7 @@
 import AppKit
 import CoreAudio
 import Foundation
+import KeyboardShortcuts
 import MixerCore
 import Observation
 
@@ -25,6 +26,8 @@ final class MixerModel {
     private(set) var profiles: [Profile] = []
     /// The app playing solo, with every other app in the mixer muted.
     private(set) var solo: SoloSession?
+    /// Every app in the mixer muted by Mute All.
+    private(set) var muteAll: MuteAllSession?
     let output = SystemOutput()
     /// How far the sliders go: to 100%, or to 200% where boost is on.
     let volumeScale = ProFeatures.volumeScale
@@ -72,6 +75,9 @@ final class MixerModel {
             self?.handleVolumeKey(key, isPressed: isPressed, isFine: isFine) ?? false
         }
         volumeKeys.start()
+        KeyboardShortcuts.onKeyUp(for: .muteAll) { [weak self] in
+            self?.toggleMuteAll()
+        }
         wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification,
             object: nil,
@@ -131,8 +137,9 @@ final class MixerModel {
     }
 
     func toggleMute(for key: String) {
-        // Muting by hand takes over from a solo, whose saved mutes no longer apply.
+        // Muting by hand takes over from a solo or Mute All, whose saved mutes no longer apply.
         endSolo(restoring: false)
+        muteAll = nil
         var setting = store.volume(for: key, on: outputDeviceUID(for: key))
         setting.isMuted.toggle()
         apply(setting, to: key)
@@ -145,6 +152,7 @@ final class MixerModel {
             endSolo(restoring: true)
             return
         }
+        endMuteAll()
         endSolo(restoring: true)
         let session = SoloSession(
             key: key,
@@ -154,6 +162,33 @@ final class MixerModel {
         let name = entries.first { $0.id == key }?.name ?? key
         log.notice("Solo: \(name, privacy: .public)")
         setMutes(session.mutes)
+    }
+
+    /// Mutes every app in the mixer, or gives each one its mute from before. Shown in the overlay,
+    /// since the shortcut works with the panel closed.
+    func toggleMuteAll() {
+        if muteAll != nil {
+            endMuteAll()
+        } else {
+            endSolo(restoring: true)
+            let session = MuteAllSession(
+                mutesBefore: Dictionary(entries.map { ($0.id, $0.isMuted) }, uniquingKeysWith: { first, _ in first })
+            )
+            muteAll = session
+            log.notice("Muted all apps")
+            setMutes(session.mutes)
+        }
+        hud.show(
+            VolumeHUDView(
+                name: "All apps",
+                icon: NSApp.applicationIconImage ?? NSImage(),
+                volume: 0,
+                isMuted: muteAll != nil,
+                scale: volumeScale,
+                status: muteAll != nil ? "Muted" : "Back as they were",
+                showsLevel: false
+            )
+        )
     }
 
     /// Saves the mix as it is now: every app in the mixer with its volume and mute. A profile with the
@@ -175,6 +210,7 @@ final class MixerModel {
 
     func applyProfile(_ profile: Profile) {
         endSolo(restoring: false)
+        muteAll = nil
         for (key, setting) in profile.changes(from: currentMix()) {
             store.setVolume(setting, for: key, on: outputDeviceUID(for: key))
             routes.clearFailures(for: key)
@@ -234,6 +270,7 @@ final class MixerModel {
             setting.volume = volumeScale.stepped(setting.volume, by: -1, fine: isFine)
         case .mute:
             endSolo(restoring: false)
+            muteAll = nil
             setting.isMuted.toggle()
         }
         apply(setting, to: appKey)
@@ -276,6 +313,13 @@ final class MixerModel {
         if !profiles.isEmpty {
             log.notice("Profiles: \(self.profiles.count), with shortcuts: \(shortcuts)")
         }
+    }
+
+    private func endMuteAll() {
+        guard let session = muteAll else { return }
+        muteAll = nil
+        log.notice("Unmuted all apps")
+        setMutes(session.mutesBefore)
     }
 
     private func endSolo(restoring: Bool) {

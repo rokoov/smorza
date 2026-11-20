@@ -174,6 +174,10 @@ struct MixerPanel: View {
                     onDelete: model.deleteProfile
                 )
             }
+            if !model.entries.isEmpty || model.muteAll != nil {
+                Button(model.muteAll == nil ? "Mute All" : "Unmute All", action: model.toggleMuteAll)
+                    .help(model.muteAll == nil ? "Mutes every app here" : "Gives every app its mute from before")
+            }
             if updater.isUpdateWaiting {
                 Button("Update Available…") { updater.checkForUpdates() }
                     .buttonStyle(.link)

@@ -335,6 +335,14 @@ do {
     )
 }
 
+// Mute All: every app muted, and each app's own mute back afterwards.
+do {
+    let session = MuteAllSession(mutesBefore: ["spotify": false, "zoom": true])
+    expect(session.mutes == ["spotify": true, "zoom": true], "every app is muted")
+    expect(session.mutesBefore["zoom"] == true, "an app muted before stays muted after")
+    expect(MuteAllSession(mutesBefore: [:]).mutes.isEmpty, "with no apps there is nothing to mute")
+}
+
 // Pins: a pinned app is kept even at 100% on the system output, and old saves load unpinned.
 do {
     expect(!AppSettings(isPinned: true).isDefault, "a pinned app is worth keeping")

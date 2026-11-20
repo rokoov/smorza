@@ -10,6 +10,7 @@ struct SettingsView: View {
     var body: some View {
         Form {
             GeneralSettings()
+            ShortcutSettings()
             VolumeKeysSettings(volumeKeys: model.volumeKeys)
             UpdateSettings(updater: updater, onCopyDiagnostics: model.copyDiagnostics)
         }
