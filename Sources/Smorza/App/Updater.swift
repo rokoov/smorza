@@ -16,6 +16,8 @@ final class Updater: NSObject {
     private(set) var canCheckForUpdates = false
     /// A background check found an update and left it for the panel to mention.
     private(set) var isUpdateWaiting = false
+    /// Sparkle keeps this in the app's defaults; on until the user turns it off.
+    private(set) var automaticallyChecks = true
 
     @ObservationIgnored private var controller: SPUStandardUpdaterController?
     @ObservationIgnored private var canCheckObservation: NSKeyValueObservation?
@@ -34,6 +36,7 @@ final class Updater: NSObject {
             userDriverDelegate: self
         )
         self.controller = controller
+        automaticallyChecks = controller.updater.automaticallyChecksForUpdates
         canCheckObservation = controller.updater.observe(\.canCheckForUpdates, options: [.initial, .new]) {
             [weak self] updater, _ in
             let canCheck = updater.canCheckForUpdates
@@ -45,6 +48,11 @@ final class Updater: NSObject {
         // A menu bar app is not the active app, so Sparkle's window would open behind the others.
         NSApp.activate()
         controller?.checkForUpdates(nil)
+    }
+
+    func setAutomaticallyChecks(_ enabled: Bool) {
+        controller?.updater.automaticallyChecksForUpdates = enabled
+        automaticallyChecks = enabled
     }
 
     /// The button as a released build shows it, for `--snapshot-demo`. Sparkle is not started.

@@ -4,11 +4,12 @@
 # The bundle is assembled and signed in a temporary folder. In an iCloud-synced checkout the File
 # Provider tags files with Finder info at any moment, and codesign refuses such files as detritus.
 
-# make_app <binary> <Sparkle.framework>: prints the path of a new, unsigned Smorza.app in a
-# temporary folder.
+# make_app <binary> <Sparkle.framework> [resource bundles...]: prints the path of a new, unsigned
+# Smorza.app in a temporary folder.
 make_app() {
     local binary=$1
     local sparkle=$2
+    shift 2
     local staging
     staging=$(mktemp -d "${TMPDIR:-/tmp}/smorza.XXXXXX")
     local app="$staging/Smorza.app"
@@ -17,6 +18,16 @@ make_app() {
     cp -X "$binary" "$app/Contents/MacOS/Smorza"
     cp -X Resources/Info.plist "$app/Contents/Info.plist"
     cp -X Resources/AppIcon.icns "$app/Contents/Resources/AppIcon.icns"
+    # The packages built into the app are MIT licensed, and their notices travel with every copy.
+    mkdir -p "$app/Contents/Resources/Licenses"
+    cp -X .build/checkouts/Sparkle/LICENSE "$app/Contents/Resources/Licenses/Sparkle.txt"
+    cp -X .build/checkouts/KeyboardShortcuts/license "$app/Contents/Resources/Licenses/KeyboardShortcuts.txt"
+    # SwiftPM resource bundles (a package's localized strings) go where Bundle.module looks first;
+    # a missing one stops the app the moment the package needs it.
+    local resources
+    for resources in "$@"; do
+        ditto --norsrc --noextattr "$resources" "$app/Contents/Resources/$(basename "$resources")"
+    done
     plutil -lint "$app/Contents/Info.plist" >/dev/null
 
     local framework="$app/Contents/Frameworks/Sparkle.framework"

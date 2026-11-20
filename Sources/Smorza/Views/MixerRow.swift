@@ -1,3 +1,4 @@
+import MixerCore
 import SwiftUI
 
 /// Icon, name and level on top, the slider below, mute on the right. The output device uses the
@@ -13,6 +14,8 @@ struct MixerRow<Icon: View, Accessory: View, Meter: View>: View {
     var unityMark: Double?
     /// Colour of the level text: orange for boost, the accent for solo.
     var levelStyle = AnyShapeStyle(.secondary)
+    /// A small symbol after the title, such as the pin of a pinned app, with what it says.
+    var titleSymbol: (name: String, label: String)?
     let isMuted: Bool
     let isEnabled: Bool
     let onChange: (Double) -> Void
@@ -33,6 +36,12 @@ struct MixerRow<Icon: View, Accessory: View, Meter: View>: View {
                     Text(title)
                         .lineLimit(1)
                         .truncationMode(.tail)
+                    if let titleSymbol {
+                        Image(systemName: titleSymbol.name)
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                            .accessibilityLabel(titleSymbol.label)
+                    }
                     Spacer(minLength: 8)
                     Text(level)
                         .font(.caption)
@@ -49,14 +58,33 @@ struct MixerRow<Icon: View, Accessory: View, Meter: View>: View {
                     .overlay(alignment: .bottom) { meter }
                     .disabled(!isEnabled)
                     .opacity(isMuted ? 0.45 : 1)
+                    .onKeyPress(keys: [.leftArrow, .rightArrow, .upArrow, .downArrow], phases: [.down, .repeat]) {
+                        press in
+                        let isUp = press.key == .rightArrow || press.key == .upArrow
+                        move(by: ScrollStep.keyChange(isUp: isUp, isFine: press.modifiers.contains(.shift)))
+                        return .handled
+                    }
+                    .accessibilityLabel("\(title) volume")
                     .accessibilityValue(level)
+                    .accessibilityAdjustableAction { direction in
+                        switch direction {
+                        case .increment: move(by: ScrollStep.keyChange(isUp: true, isFine: false))
+                        case .decrement: move(by: ScrollStep.keyChange(isUp: false, isFine: false))
+                        @unknown default: break
+                        }
+                    }
                     .help(unityMark == nil ? "" : "Past the mark boosts above 100%")
             }
             accessory
-            MuteButton(isMuted: isMuted, volume: volume, onSolo: onSolo, action: onToggleMute)
+            MuteButton(name: title, isMuted: isMuted, volume: volume, onSolo: onSolo, action: onToggleMute)
         }
         .frame(minHeight: PanelMetrics.rowHeight)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(title)
+    }
+
+    private func move(by change: Double) {
+        guard isEnabled else { return }
+        onChange(min(max(position + change, 0), 1))
     }
 }

@@ -9,17 +9,21 @@ public struct AppSettings: Codable, Equatable {
     /// The volume set most recently on any device. A device the app has no volume for starts here,
     /// so plugging in new headphones never brings back a full-volume app.
     public var lastVolume: AppVolume?
+    /// Keeps the app's row while it is quiet or not running, so it can be set before it plays.
+    public var isPinned: Bool
 
     public init(
         outputDeviceUID: String? = nil,
         outputDeviceName: String? = nil,
         volumes: [String: AppVolume] = [:],
-        lastVolume: AppVolume? = nil
+        lastVolume: AppVolume? = nil,
+        isPinned: Bool = false
     ) {
         self.outputDeviceUID = outputDeviceUID
         self.outputDeviceName = outputDeviceName
         self.volumes = volumes
         self.lastVolume = lastVolume
+        self.isPinned = isPinned
     }
 
     /// Every field may be missing: saves from before a field existed still load.
@@ -29,6 +33,7 @@ public struct AppSettings: Codable, Equatable {
         outputDeviceName = try container.decodeIfPresent(String.self, forKey: .outputDeviceName)
         volumes = try container.decodeIfPresent([String: AppVolume].self, forKey: .volumes) ?? [:]
         lastVolume = try container.decodeIfPresent(AppVolume.self, forKey: .lastVolume)
+        isPinned = try container.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
     }
 
     public func volume(on deviceUID: String) -> AppVolume {
@@ -54,7 +59,7 @@ public struct AppSettings: Codable, Equatable {
 
     /// Nothing differs from an app the mixer has never seen, so there is nothing to keep.
     public var isDefault: Bool {
-        outputDeviceUID == nil && !(lastVolume?.needsRouting ?? false)
+        !isPinned && outputDeviceUID == nil && !(lastVolume?.needsRouting ?? false)
             && volumes.values.allSatisfy { !$0.needsRouting }
     }
 }

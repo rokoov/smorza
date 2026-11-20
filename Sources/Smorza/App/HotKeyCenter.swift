@@ -8,7 +8,7 @@ final class HotKeyCenter {
         kVK_ANSI_1, kVK_ANSI_2, kVK_ANSI_3, kVK_ANSI_4, kVK_ANSI_5, kVK_ANSI_6, kVK_ANSI_7, kVK_ANSI_8, kVK_ANSI_9,
     ]
     /// Tags this app's hot keys ('VMIX').
-    private static let signature: OSType = 0x564D_4958
+    nonisolated private static let signature: OSType = 0x564D_4958
 
     private var handler: EventHandlerRef?
     private var hotKeys: [EventHotKeyRef] = []
@@ -65,7 +65,10 @@ final class HotKeyCenter {
                     nil,
                     &hotKeyID
                 )
-                guard status == noErr else { return status }
+                // Other hot keys of this app (KeyboardShortcuts) carry their own signature.
+                guard status == noErr, hotKeyID.signature == HotKeyCenter.signature else {
+                    return OSStatus(eventNotHandledErr)
+                }
                 let center = Unmanaged<HotKeyCenter>.fromOpaque(context).takeUnretainedValue()
                 // Carbon delivers hot keys on the main thread.
                 MainActor.assumeIsolated { center.fire(hotKeyID.id) }

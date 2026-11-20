@@ -22,6 +22,8 @@ final class SystemOutput {
     @ObservationIgnored var onDeviceChange: (() -> Void)?
     /// Called when a device is plugged in or removed, so apps sent to it can move.
     @ObservationIgnored var onDevicesChange: (() -> Void)?
+    /// Called when the output's volume or mute changes on its own device, not when switching.
+    @ObservationIgnored var onLevelsChange: (() -> Void)?
     @ObservationIgnored private var isDemo = false
     @ObservationIgnored private var defaultDeviceListener: PropertyListener?
     @ObservationIgnored private var deviceListListener: PropertyListener?
@@ -104,6 +106,7 @@ final class SystemOutput {
         levelListeners = [Self.volumeSelector, kAudioDevicePropertyMute].map { selector in
             PropertyListener(current, selector, scope: Self.outputScope) { [weak self] in
                 self?.refreshLevels()
+                self?.onLevelsChange?()
             }
         }
         refreshLevels()

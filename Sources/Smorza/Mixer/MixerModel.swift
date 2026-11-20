@@ -1,6 +1,7 @@
 import AppKit
 import CoreAudio
 import Foundation
+import KeyboardShortcuts
 import MixerCore
 import Observation
 
@@ -25,6 +26,10 @@ final class MixerModel {
     private(set) var profiles: [Profile] = []
     /// The app playing solo, with every other app in the mixer muted.
     private(set) var solo: SoloSession?
+    /// Every app in the mixer muted by Mute All.
+    private(set) var muteAll: MuteAllSession?
+    /// The user's order of output devices, for automatic switching.
+    private(set) var outputPriority = OutputPriority()
     let output = SystemOutput()
     /// How far the sliders go: to 100%, or to 200% where boost is on.
     let volumeScale = ProFeatures.volumeScale
@@ -42,6 +47,10 @@ final class MixerModel {
     @ObservationIgnored private let hud = VolumeHUD()
     @ObservationIgnored private var identities: [AudioObjectID: AppIdentity] = [:]
     @ObservationIgnored private var listedKeys: Set<String> = []
+    /// When each app was last seen playing, for the order of the quiet rows.
+    @ObservationIgnored private var lastPlayed: [String: Date] = [:]
+    /// False until the first output device is read, so starting up shows no overlay.
+    @ObservationIgnored private var hasLoadedOutput = false
     @ObservationIgnored private var rowSummary: [String] = []
     @ObservationIgnored private var isPanelVisible = false
     @ObservationIgnored private var isDemo = false
@@ -59,17 +68,24 @@ final class MixerModel {
         monitor.onChange = { [weak self] in self?.clientsChanged() }
         output.onDeviceChange = { [weak self] in self?.outputDeviceChanged() }
         output.onDevicesChange = { [weak self] in self?.outputDevicesChanged() }
+        output.onLevelsChange = { [weak self] in self?.outputLevelsChanged() }
+        outputPriority = store.outputPriority
         capture.onFinish = { [weak self] in self?.syncRoutes() }
         routes.onRetry = { [weak self] in self?.syncRoutes() }
         routes.onRoutesChanged = { [weak self] in self?.updateBackgroundWork() }
         output.start()
+        hasLoadedOutput = true
+        applyOutputPriority()
         monitor.start()
         listenForServiceRestart()
         profilesChanged()
-        volumeKeys.onKey = { [weak self] key, isFine in
-            self?.handleVolumeKey(key, isFine: isFine)
+        volumeKeys.onKey = { [weak self] key, isPressed, isFine in
+            self?.handleVolumeKey(key, isPressed: isPressed, isFine: isFine) ?? false
         }
         volumeKeys.start()
+        KeyboardShortcuts.onKeyUp(for: .muteAll) { [weak self] in
+            self?.toggleMuteAll()
+        }
         wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification,
             object: nil,
@@ -112,9 +128,26 @@ final class MixerModel {
         apply(setting, to: key)
     }
 
+    /// Moves an app's slider by `change` of its length, for scrolling over its row.
+    func nudgeVolume(of key: String, byPosition change: Double) {
+        let current = volumeScale.clamped(store.volume(for: key, on: outputDeviceUID(for: key)).volume)
+        let position = min(max(volumeScale.position(of: current) + change, 0), 1)
+        setVolume(volumeScale.volume(atPosition: position), for: key)
+    }
+
+    /// Keeps an app's row while it is quiet or not running, or lets it go again.
+    func togglePin(for key: String) {
+        let isPinned = !store.settings(for: key).isPinned
+        store.setPinned(isPinned, for: key)
+        let name = entries.first { $0.id == key }?.name ?? key
+        log.notice("\(isPinned ? "Pinned" : "Unpinned", privacy: .public) \(name, privacy: .public)")
+        rebuildEntries(from: currentApps())
+    }
+
     func toggleMute(for key: String) {
-        // Muting by hand takes over from a solo, whose saved mutes no longer apply.
+        // Muting by hand takes over from a solo or Mute All, whose saved mutes no longer apply.
         endSolo(restoring: false)
+        muteAll = nil
         var setting = store.volume(for: key, on: outputDeviceUID(for: key))
         setting.isMuted.toggle()
         apply(setting, to: key)
@@ -127,6 +160,7 @@ final class MixerModel {
             endSolo(restoring: true)
             return
         }
+        endMuteAll()
         endSolo(restoring: true)
         let session = SoloSession(
             key: key,
@@ -136,6 +170,33 @@ final class MixerModel {
         let name = entries.first { $0.id == key }?.name ?? key
         log.notice("Solo: \(name, privacy: .public)")
         setMutes(session.mutes)
+    }
+
+    /// Mutes every app in the mixer, or gives each one its mute from before. Shown in the overlay,
+    /// since the shortcut works with the panel closed.
+    func toggleMuteAll() {
+        if muteAll != nil {
+            endMuteAll()
+        } else {
+            endSolo(restoring: true)
+            let session = MuteAllSession(
+                mutesBefore: Dictionary(entries.map { ($0.id, $0.isMuted) }, uniquingKeysWith: { first, _ in first })
+            )
+            muteAll = session
+            log.notice("Muted all apps")
+            setMutes(session.mutes)
+        }
+        hud.show(
+            VolumeHUDView(
+                name: "All apps",
+                icon: NSApp.applicationIconImage ?? NSImage(),
+                volume: 0,
+                isMuted: muteAll != nil,
+                scale: volumeScale,
+                status: muteAll != nil ? "Muted" : "Back as they were",
+                showsLevel: false
+            )
+        )
     }
 
     /// Saves the mix as it is now: every app in the mixer with its volume and mute. A profile with the
@@ -157,6 +218,7 @@ final class MixerModel {
 
     func applyProfile(_ profile: Profile) {
         endSolo(restoring: false)
+        muteAll = nil
         for (key, setting) in profile.changes(from: currentMix()) {
             store.setVolume(setting, for: key, on: outputDeviceUID(for: key))
             routes.clearFailures(for: key)
@@ -179,6 +241,28 @@ final class MixerModel {
         syncRoutes()
     }
 
+    /// Turns automatic switching to the first connected device of the user's order on or off.
+    func setOutputSwitching(_ isEnabled: Bool) {
+        outputPriority.isEnabled = isEnabled
+        if isEnabled {
+            rememberOutputVolume()
+        }
+        store.setOutputPriority(outputPriority)
+        applyOutputPriority()
+    }
+
+    /// Moves a device up (negative) or down (positive) the user's order.
+    func moveOutputDevice(_ uid: String, by offset: Int) {
+        outputPriority.move(uid, by: offset)
+        store.setOutputPriority(outputPriority)
+        applyOutputPriority()
+    }
+
+    func forgetOutputDevice(_ uid: String) {
+        outputPriority.forget(uid)
+        store.setOutputPriority(outputPriority)
+    }
+
     func retryCaptureCheck() {
         capture.retry()
         syncRoutes()
@@ -196,12 +280,15 @@ final class MixerModel {
         syncRoutes()
     }
 
-    /// Control + a volume key changes the app in front, not the whole Mac, and shows the overlay.
-    private func handleVolumeKey(_ key: VolumeKeyTap.Key, isFine: Bool) {
+    /// A volume key changes the app in front, not the whole Mac, and shows the overlay. With no app
+    /// in front that the mixer could change (this app, or one with no bundle), the system keeps it.
+    private func handleVolumeKey(_ key: VolumeKeyTap.Key, isPressed: Bool, isFine: Bool) -> Bool {
         guard let app = NSWorkspace.shared.frontmostApplication,
             let appKey = app.bundleIdentifier,
             appKey != Bundle.main.bundleIdentifier
-        else { return }
+        else { return false }
+        // The release only has to be kept from the system, like its press.
+        guard isPressed else { return true }
         var setting = store.volume(for: appKey, on: outputDeviceUID(for: appKey))
         setting.volume = volumeScale.clamped(setting.volume)
         switch key {
@@ -213,6 +300,7 @@ final class MixerModel {
             setting.volume = volumeScale.stepped(setting.volume, by: -1, fine: isFine)
         case .mute:
             endSolo(restoring: false)
+            muteAll = nil
             setting.isMuted.toggle()
         }
         apply(setting, to: appKey)
@@ -225,6 +313,7 @@ final class MixerModel {
                 scale: volumeScale
             )
         )
+        return true
     }
 
     /// Every app in the mixer with the volume and mute it has now.
@@ -254,6 +343,13 @@ final class MixerModel {
         if !profiles.isEmpty {
             log.notice("Profiles: \(self.profiles.count), with shortcuts: \(shortcuts)")
         }
+    }
+
+    private func endMuteAll() {
+        guard let session = muteAll else { return }
+        muteAll = nil
+        log.notice("Unmuted all apps")
+        setMutes(session.mutesBefore)
     }
 
     private func endSolo(restoring: Bool) {
@@ -362,10 +458,17 @@ final class MixerModel {
         guard !isDemo else { return }
         // Once an app has a row it keeps it until it quits, so pausing it or dragging it back to
         // 100% never pulls the row away in the middle of an adjustment.
+        let now = Date()
+        for app in apps where app.isPlaying {
+            lastPlayed[app.key] = now
+        }
         listedKeys.formIntersection(apps.map(\.key))
-        let shown = apps.filter { $0.isPlaying || $0.needsRoute || listedKeys.contains($0.key) }
+        let pinned = Set(store.pinnedApps)
+        let shown = apps.filter {
+            $0.isPlaying || $0.needsRoute || listedKeys.contains($0.key) || pinned.contains($0.key)
+        }
         listedKeys.formUnion(shown.map(\.key))
-        let rows = shown.map { app in
+        let running = shown.map { app in
             MixerEntry(
                 id: app.key,
                 name: app.identity.name,
@@ -377,14 +480,48 @@ final class MixerModel {
                 outputDeviceName: app.settings.outputDeviceName,
                 outputSymbol: app.outputSymbol,
                 isOutputConnected: app.settings.outputDeviceUID == nil || app.chosenDevice != nil,
-                isSolo: app.key == solo?.key
+                isSolo: app.key == solo?.key,
+                isPinned: pinned.contains(app.key),
+                isRouted: app.needsRoute
             )
         }
-        let ordered = RowOrder.arrange(rows, keepingPlacesOf: isPanelVisible ? entries.map(\.id) : nil)
+        let rows = running + pinnedRows(for: pinned.subtracting(apps.map(\.key)))
+        let ordered = RowOrder.arrange(
+            rows,
+            lastPlayed: lastPlayed,
+            keepingPlacesOf: isPanelVisible ? entries.map(\.id) : nil
+        )
         if ordered != entries {
             entries = ordered
         }
         logRows(ordered)
+    }
+
+    /// Rows for pinned apps that are not running, from their saved settings, so they can be set
+    /// before they start.
+    private func pinnedRows(for keys: Set<String>) -> [MixerEntry] {
+        let connected = Set(output.devices.map(\.uid))
+        return keys.compactMap { key in
+            guard let identity = resolver.identity(forBundleIdentifier: key) else { return nil }
+            let settings = store.settings(for: key)
+            let deviceUID = settings.outputDeviceUID(systemOutputUID: output.deviceUID, connectedUIDs: connected)
+            var volume = settings.volume(on: deviceUID)
+            volume.volume = volumeScale.clamped(volume.volume)
+            return MixerEntry(
+                id: key,
+                name: identity.name,
+                icon: identity.icon,
+                volume: volume.volume,
+                isMuted: volume.isMuted,
+                isPlaying: false,
+                outputDeviceUID: settings.outputDeviceUID,
+                outputDeviceName: settings.outputDeviceName,
+                outputSymbol: output.device(withUID: deviceUID)?.symbolName ?? output.symbolName,
+                isOutputConnected: settings.outputDeviceUID.map(connected.contains) ?? true,
+                isPinned: true,
+                isRunning: false
+            )
+        }
     }
 
     private func logRows(_ rows: [MixerEntry]) {
@@ -397,6 +534,16 @@ final class MixerModel {
 
     private func outputDeviceChanged() {
         capture.outputDeviceChanged(to: output.deviceID)
+        // Each device keeps its own volume, for devices that do not keep it themselves.
+        if outputPriority.isEnabled, output.canSetVolume,
+            let volume = outputPriority.volumes[output.deviceUID], abs(volume - output.volume) > 0.005
+        {
+            output.setVolume(volume)
+        }
+        // In the panel the switch is in plain sight; elsewhere the overlay says where sound went.
+        if hasLoadedOutput, !isPanelVisible {
+            showOutputOverlay()
+        }
         // Routes still on the old device are replaced by the next sync.
         syncRoutes()
     }
@@ -405,7 +552,53 @@ final class MixerModel {
     /// routes whose device changed are rebuilt, each new one starting before the old one goes.
     private func outputDevicesChanged() {
         log.notice("Output devices changed: \(self.output.devices.count) connected")
+        let seen = output.devices.map { OutputPriority.Device(uid: $0.uid, name: $0.name) }
+        if outputPriority.learn(seen) {
+            store.setOutputPriority(outputPriority)
+        }
+        applyOutputPriority()
         syncRoutes()
+    }
+
+    /// Makes the first connected device of the user's order the default output, when it is not.
+    /// Only a device coming or going, or a change to the order, switches: a device the user picks
+    /// by hand stays until then.
+    private func applyOutputPriority() {
+        // The device list loads before the current output, and snapshots never change the output.
+        guard hasLoadedOutput, routesAudio,
+            let uid = outputPriority.preferredDevice(among: Set(output.devices.map(\.uid))),
+            uid != output.deviceUID,
+            let device = output.device(withUID: uid)
+        else { return }
+        log.notice("Output priority: switching to \(device.name, privacy: .public)")
+        output.select(device)
+    }
+
+    private func outputLevelsChanged() {
+        if outputPriority.isEnabled {
+            rememberOutputVolume()
+        }
+    }
+
+    private func rememberOutputVolume() {
+        guard !output.deviceUID.isEmpty, output.canSetVolume else { return }
+        outputPriority.volumes[output.deviceUID] = output.volume
+        store.setOutputPriority(outputPriority)
+    }
+
+    private func showOutputOverlay() {
+        let icon = NSImage(systemSymbolName: output.symbolName, accessibilityDescription: nil) ?? NSImage()
+        hud.show(
+            VolumeHUDView(
+                name: output.name,
+                icon: icon,
+                volume: output.volume,
+                isMuted: output.isMuted,
+                scale: .standard,
+                status: output.canSetVolume ? nil : "Fixed volume",
+                showsLevel: output.canSetVolume
+            )
+        )
     }
 
     private func systemDidWake() {

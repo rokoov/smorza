@@ -34,6 +34,12 @@ for key in NSAudioCaptureUsageDescription LSUIElement CFBundleIdentifier SUFeedU
     /usr/libexec/PlistBuddy -c "Print :$key" "$plist" >/dev/null || { echo "Info.plist is missing $key"; exit 1; }
 done
 [[ -d build/Smorza.app/Contents/Frameworks/Sparkle.framework ]] || { echo "Sparkle.framework is missing"; exit 1; }
+shopt -s nullglob
+for resources in "$(swift build -c release --show-bin-path)"/*.bundle; do
+    name=$(basename "$resources")
+    [[ -d "build/Smorza.app/Contents/Resources/$name" ]] || { echo "$name is missing from the app"; exit 1; }
+done
+shopt -u nullglob
 # Checked on a clean copy: in a synced folder iCloud tags files with Finder info at any moment, which
 # strict verification refuses although the signature is intact.
 verify=$(mktemp -d "${TMPDIR:-/tmp}/smorza-verify.XXXXXX")

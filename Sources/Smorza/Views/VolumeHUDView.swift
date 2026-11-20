@@ -8,6 +8,9 @@ struct VolumeHUDView: View {
     let volume: Double
     let isMuted: Bool
     let scale: VolumeScale
+    /// Replaces the level text, for news that is not a level.
+    var status: String?
+    var showsLevel = true
 
     private let width: CGFloat = 260
     private let cornerRadius: CGFloat = 14
@@ -16,6 +19,7 @@ struct VolumeHUDView: View {
         HStack(spacing: 10) {
             Image(nsImage: icon)
                 .resizable()
+                .scaledToFit()
                 .frame(width: PanelMetrics.iconSize, height: PanelMetrics.iconSize)
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .firstTextBaseline) {
@@ -23,16 +27,18 @@ struct VolumeHUDView: View {
                         .font(.callout.weight(.semibold))
                         .lineLimit(1)
                     Spacer(minLength: 8)
-                    Text(isMuted ? "Muted" : "\(VolumeCurve.percent(volume))%")
+                    Text(status ?? (isMuted ? "Muted" : "\(VolumeCurve.percent(volume))%"))
                         .font(.caption)
                         .monospacedDigit()
                         .foregroundStyle(isMuted ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
                 }
-                LevelBar(
-                    position: scale.position(of: volume),
-                    unityMark: scale.allowsBoost ? scale.unityPosition : nil,
-                    isMuted: isMuted
-                )
+                if showsLevel {
+                    LevelBar(
+                        position: scale.position(of: volume),
+                        unityMark: scale.allowsBoost ? scale.unityPosition : nil,
+                        isMuted: isMuted
+                    )
+                }
             }
         }
         .padding(.horizontal, 14)

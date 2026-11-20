@@ -286,10 +286,12 @@ do {
     expect(defaults.data(forKey: "Settings") == newer, "a newer settings format is left untouched")
 }
 
-// Row order: playing apps first, then by name; open panels keep rows in place.
+// Row order: playing apps first, then pinned, then by when they last played; open panels keep rows
+// in place.
 struct Row: MixerRowItem {
     let id: String
     let isPlaying: Bool
+    var isPinned = false
     var name: String { id }
 }
 
@@ -313,6 +315,89 @@ do {
         "rows on screen hold their places, new ones follow: \(held)"
     )
     expect(RowOrder.arrange([Row]()).isEmpty, "no rows stays no rows")
+
+    let now = Date()
+    let mixed = [
+        Row(id: "zoom", isPlaying: false, isPinned: true),
+        Row(id: "Discord", isPlaying: false),
+        Row(id: "Music", isPlaying: false),
+        Row(id: "Spotify", isPlaying: true),
+        Row(id: "Arc", isPlaying: false),
+        Row(id: "Slack", isPlaying: true, isPinned: true),
+    ]
+    let recent = RowOrder.arrange(
+        mixed,
+        lastPlayed: ["Music": now, "Discord": now.addingTimeInterval(-60), "zoom": now.addingTimeInterval(-5)]
+    ).map(\.id)
+    expect(
+        recent == ["Slack", "Spotify", "zoom", "Music", "Discord", "Arc"],
+        "playing, then pinned, then most recently played, then never played: \(recent)"
+    )
+}
+
+// Mute All: every app muted, and each app's own mute back afterwards.
+do {
+    let session = MuteAllSession(mutesBefore: ["spotify": false, "zoom": true])
+    expect(session.mutes == ["spotify": true, "zoom": true], "every app is muted")
+    expect(session.mutesBefore["zoom"] == true, "an app muted before stays muted after")
+    expect(MuteAllSession(mutesBefore: [:]).mutes.isEmpty, "with no apps there is nothing to mute")
+}
+
+// Output priority: the first connected device in the user's order, each device with its volume.
+do {
+    var priority = OutputPriority()
+    let speakers = OutputPriority.Device(uid: "speakers", name: "Speakers")
+    let airpods = OutputPriority.Device(uid: "airpods", name: "AirPods Pro")
+    let display = OutputPriority.Device(uid: "display", name: "Studio Display")
+    expect(priority.learn([speakers, airpods]), "new devices are learned")
+    expect(priority.preferredDevice(among: ["speakers", "airpods"]) == nil, "nothing switches while it is off")
+    priority.isEnabled = true
+    expect(priority.preferredDevice(among: ["speakers", "airpods"]) == "speakers", "the first in the list wins")
+    priority.move("airpods", by: -1)
+    expect(priority.devices.map(\.uid) == ["airpods", "speakers"], "a device moves up")
+    expect(priority.preferredDevice(among: ["speakers", "airpods"]) == "airpods", "and now wins")
+    expect(priority.preferredDevice(among: ["speakers"]) == "speakers", "until it is unplugged")
+    expect(priority.preferredDevice(among: ["usb"]) == nil, "an unlisted device is left to macOS")
+    priority.move("airpods", by: -5)
+    expect(priority.devices.first?.uid == "airpods", "moving past the top stops there")
+    expect(priority.learn([display]), "a new device joins")
+    expect(priority.devices.last?.uid == "display", "at the end")
+    expect(!priority.learn([airpods]), "a known device changes nothing")
+    priority.learn([OutputPriority.Device(uid: "airpods", name: "Roko's AirPods")])
+    expect(priority.devices.first?.name == "Roko's AirPods", "a renamed device keeps its place")
+    priority.volumes["display"] = 0.3
+    priority.forget("display")
+    expect(priority.devices.count == 2 && priority.volumes["display"] == nil, "a forgotten device goes with its volume")
+
+    let defaults = UserDefaults(suiteName: "priority-check")!
+    defaults.removePersistentDomain(forName: "priority-check")
+    let store = MixerSettingsStore(defaults: defaults)
+    store.setOutputPriority(priority)
+    expect(MixerSettingsStore(defaults: defaults).outputPriority == priority, "the order is saved and loads again")
+    let version3 = #"{"version":3,"apps":{},"profiles":[]}"#
+    defaults.set(Data(version3.utf8), forKey: "Settings")
+    expect(
+        MixerSettingsStore(defaults: defaults).outputPriority == OutputPriority(),
+        "a version 3 save loads with it off"
+    )
+    defaults.removePersistentDomain(forName: "priority-check")
+}
+
+// Pins: a pinned app is kept even at 100% on the system output, and old saves load unpinned.
+do {
+    expect(!AppSettings(isPinned: true).isDefault, "a pinned app is worth keeping")
+    let old = Data(#"{"volumes":{},"lastVolume":{"volume":0.5,"isMuted":false}}"#.utf8)
+    let decoded = try? JSONDecoder().decode(AppSettings.self, from: old)
+    expect(decoded?.isPinned == false, "a save from before pins loads unpinned")
+    let defaults = UserDefaults(suiteName: "pins-check")!
+    defaults.removePersistentDomain(forName: "pins-check")
+    let store = MixerSettingsStore(defaults: defaults)
+    store.setPinned(true, for: "us.zoom.xos")
+    expect(store.pinnedApps == ["us.zoom.xos"], "a pin is saved")
+    expect(MixerSettingsStore(defaults: defaults).pinnedApps == ["us.zoom.xos"], "and loads again")
+    store.setPinned(false, for: "us.zoom.xos")
+    expect(store.pinnedApps.isEmpty, "unpinning an untouched app forgets it")
+    defaults.removePersistentDomain(forName: "pins-check")
 }
 
 // Solo: everyone else muted, and each app's own mute back afterwards.
@@ -349,7 +434,7 @@ do {
     let version2 = #"{"version":2,"apps":{"spotify":{"volumes":{},"lastVolume":{"volume":0.4,"isMuted":false}}}}"#
     defaults.set(Data(version2.utf8), forKey: "Settings")
     let store = MixerSettingsStore(defaults: defaults)
-    expect(store.volume(for: "spotify", on: "x").volume == 0.4, "a version 2 save loads into version 3")
+    expect(store.volume(for: "spotify", on: "x").volume == 0.4, "a version 2 save loads into the current one")
     expect(store.profiles.isEmpty, "a version 2 save has no profiles")
     store.saveProfile(meeting)
     var renamed = meeting
@@ -435,6 +520,24 @@ do {
     expect(LevelMeter.next(from: 0.2, toward: 0.9) == 0.9, "a louder peak shows at once")
     expect(nearlyEqual(LevelMeter.next(from: 0.9, toward: 0), 0.84), "a bar falls one step per update")
     expect(LevelMeter.next(from: 0.03, toward: 0) == 0, "and stops at the new level, never below it")
+}
+
+// Scrolling over a row: up or right turns the volume up, whatever the scroll direction setting.
+do {
+    func change(x: Double = 0, y: Double = 0, precise: Bool = true, inverted: Bool = false) -> Double {
+        ScrollStep.positionChange(deltaX: x, deltaY: y, isPrecise: precise, isInverted: inverted)
+    }
+    expect(change(y: 1, precise: false) == 0.05, "one wheel notch up is 5% more")
+    expect(change(y: -1, precise: false) == -0.05, "one notch down is 5% less")
+    expect(change(y: 10, precise: false) == ScrollStep.maximum, "an accelerated wheel moves at most 10% at once")
+    expect(change(y: 20) > 0, "fingers up with classic scrolling turns it up")
+    expect(change(y: -20, inverted: true) > 0, "fingers up with natural scrolling turns it up too")
+    expect(change(x: -20) > 0, "fingers to the right with classic scrolling turn it up")
+    expect(change(x: 20, inverted: true) > 0, "fingers to the right with natural scrolling turn it up too")
+    expect(abs(change(y: 20) - 0.1) < 1e-9, "20 points of trackpad are 10%")
+    expect(change(x: 1, y: 5) == change(y: 5), "the larger of the two directions decides")
+    expect(ScrollStep.keyChange(isUp: true, isFine: false) == 0.05, "an arrow key moves 5%")
+    expect(ScrollStep.keyChange(isUp: false, isFine: true) == -0.01, "with Shift it moves 1%")
 }
 
 print("\(passed) passed, \(failures) failed")

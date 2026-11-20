@@ -6,7 +6,9 @@ let package = Package(
     platforms: [.macOS("14.4")],
     dependencies: [
         // Updates. The binary framework is copied into the app by scripts/bundle.sh.
-        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.10.0")
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.10.0"),
+        // Global shortcuts the user can change, with the recorder for the settings window.
+        .package(url: "https://github.com/sindresorhus/KeyboardShortcuts", from: "2.0.0"),
     ],
     targets: [
         .target(
@@ -15,7 +17,11 @@ let package = Package(
         ),
         .executableTarget(
             name: "Smorza",
-            dependencies: ["MixerCore", .product(name: "Sparkle", package: "Sparkle")],
+            dependencies: [
+                "MixerCore",
+                .product(name: "Sparkle", package: "Sparkle"),
+                .product(name: "KeyboardShortcuts", package: "KeyboardShortcuts"),
+            ],
             path: "Sources/Smorza",
             linkerSettings: [
                 .linkedFramework("AudioToolbox"),

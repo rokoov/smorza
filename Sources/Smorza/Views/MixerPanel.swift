@@ -1,18 +1,25 @@
 import AppKit
+import MixerCore
 import SwiftUI
 
 /// The menu bar panel: the output volume, a row per app, the output devices and the footer.
 struct MixerPanel: View {
     let model: MixerModel
     let updater: Updater
-    @State private var loginItem = LoginItem()
     @State private var isSavingProfile = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.openSettings) private var openSettings
+    /// The row under the pointer, which scrolling turns up or down.
+    @State private var hoveredRow: String?
+    @State private var scrollMonitor = RowScrollMonitor()
+    /// Stands for the output device's row among the app rows' keys.
+    private static let outputRowID = "output-device"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             OutputRow(output: model.output)
                 .padding(PanelMetrics.padding)
+                .onHover { hover(Self.outputRowID, isInside: $0) }
             Divider()
             if model.captureState == .blocked || (model.captureState == .checking && model.wasCaptureBlocked) {
                 CaptureNotice(isRetrying: model.captureState == .checking, onRetry: model.retryCaptureCheck)
@@ -60,8 +67,10 @@ struct MixerPanel: View {
             WindowVisibilityReader { isVisible in
                 if isVisible {
                     model.panelDidAppear()
-                    loginItem.refresh()
+                    scrollMonitor.start(scroll)
                 } else {
+                    scrollMonitor.stop()
+                    hoveredRow = nil
                     model.panelDidDisappear()
                 }
             }
@@ -103,12 +112,47 @@ struct MixerPanel: View {
                     onVolume: { model.setVolume($0, for: entry.id) },
                     onToggleMute: { model.toggleMute(for: entry.id) },
                     onSolo: { model.toggleSolo(for: entry.id) },
-                    onChooseOutput: { model.setOutputDevice($0, for: entry.id) }
+                    onChooseOutput: { model.setOutputDevice($0, for: entry.id) },
+                    onTogglePin: { model.togglePin(for: entry.id) },
+                    onHover: { hover(entry.id, isInside: $0) }
                 )
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
         .padding(PanelMetrics.padding)
+    }
+
+    private func hover(_ row: String, isInside: Bool) {
+        if isInside {
+            hoveredRow = row
+        } else if hoveredRow == row {
+            hoveredRow = nil
+        }
+    }
+
+    /// Scrolling over a row changes its volume. In a list long enough to scroll, scrolling up and
+    /// down moves the list, and sideways scrolling still changes the volume.
+    private func scroll(_ event: NSEvent) -> Bool {
+        guard let row = hoveredRow else { return false }
+        let isVertical = abs(event.scrollingDeltaY) >= abs(event.scrollingDeltaX)
+        if isVertical, row != Self.outputRowID, model.entries.count > PanelMetrics.visibleRows {
+            return false
+        }
+        // Momentum after the fingers lift would keep turning it.
+        guard event.momentumPhase.isEmpty else { return true }
+        let change = ScrollStep.positionChange(
+            deltaX: Double(event.scrollingDeltaX),
+            deltaY: Double(event.scrollingDeltaY),
+            isPrecise: event.hasPreciseScrollingDeltas,
+            isInverted: event.isDirectionInvertedFromDevice
+        )
+        guard change != 0 else { return true }
+        if row == Self.outputRowID {
+            model.output.setVolume(model.output.volume + change)
+        } else {
+            model.nudgeVolume(of: row, byPosition: change)
+        }
+        return true
     }
 
     /// Rows fade out under the scroll edges instead of being cut off.
@@ -121,58 +165,43 @@ struct MixerPanel: View {
     }
 
     private var footer: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Toggle("Open at login", isOn: Binding(get: { loginItem.isEnabled }, set: { loginItem.setEnabled($0) }))
-                    .toggleStyle(.checkbox)
-                Spacer()
-                if ProFeatures.isProfilesEnabled {
-                    ProfilesMenu(
-                        profiles: model.profiles,
-                        onApply: model.applyProfile,
-                        onSave: { isSavingProfile = true },
-                        onDelete: model.deleteProfile
-                    )
-                }
-                Button("Quit") { NSApp.terminate(nil) }
-                    .keyboardShortcut("q")
+        HStack(spacing: 8) {
+            if ProFeatures.isProfilesEnabled {
+                ProfilesMenu(
+                    profiles: model.profiles,
+                    onApply: model.applyProfile,
+                    onSave: { isSavingProfile = true },
+                    onDelete: model.deleteProfile
+                )
             }
-            Toggle(
-                "Control + volume keys change the app in front",
-                isOn: Binding(get: { model.volumeKeys.isEnabled }, set: { model.volumeKeys.setEnabled($0) })
-            )
-            .toggleStyle(.checkbox)
-            if model.volumeKeys.isEnabled, !model.volumeKeys.isTrusted {
-                HStack(spacing: 6) {
-                    Text("Needs Accessibility to catch the keys.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Button("Open Settings") {
-                        if let url = URL(
-                            string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
-                        ) {
-                            NSWorkspace.shared.open(url)
-                        }
-                    }
+            if !model.entries.isEmpty || model.muteAll != nil {
+                Button(model.muteAll == nil ? "Mute All" : "Unmute All", action: model.toggleMuteAll)
+                    .help(model.muteAll == nil ? "Mutes every app here" : "Gives every app its mute from before")
+            }
+            if updater.isUpdateWaiting {
+                Button("Update Available…") { updater.checkForUpdates() }
                     .buttonStyle(.link)
-                    .font(.caption)
-                }
             }
-            if loginItem.needsApproval {
-                Text("Allow Smorza in System Settings → General → Login Items.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else if let error = loginItem.error {
-                Text(error)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                    .lineLimit(2)
+            Spacer()
+            Button {
+                openSettings()
+                // A menu bar app is not active, so the window would open behind the others.
+                NSApp.activate()
+            } label: {
+                Image(systemName: "gearshape")
+                    .frame(width: PanelMetrics.hitTarget, height: PanelMetrics.hitTarget)
+                    .contentShape(Rectangle())
             }
-            VersionRow(updater: updater, onCopyDiagnostics: model.copyDiagnostics)
-                .padding(.top, 4)
+            .buttonStyle(.borderless)
+            .foregroundStyle(.secondary)
+            .help("Settings…")
+            .accessibilityLabel("Settings")
+            .keyboardShortcut(",")
+            Button("Quit") { NSApp.terminate(nil) }
+                .keyboardShortcut("q")
         }
         .controlSize(.small)
         .padding(.horizontal, PanelMetrics.padding)
-        .padding(.vertical, 10)
+        .padding(.vertical, 8)
     }
 }
