@@ -155,6 +155,12 @@ are playing, and the mixer's recent log. Nothing is sent anywhere.
 
 `--snapshot-demo <dir>` renders the panel with sample apps and devices; it made the screenshots above.
 
+## Credits
+
+Smorza uses [Sparkle](https://sparkle-project.org) for its updates and
+[KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts) for its shortcuts, both MIT licensed. Their
+licences come with the app, in `Smorza.app/Contents/Resources/Licenses`.
+
 ## License
 
 MIT, see [LICENSE](LICENSE).

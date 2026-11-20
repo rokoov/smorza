@@ -18,6 +18,10 @@ make_app() {
     cp -X "$binary" "$app/Contents/MacOS/Smorza"
     cp -X Resources/Info.plist "$app/Contents/Info.plist"
     cp -X Resources/AppIcon.icns "$app/Contents/Resources/AppIcon.icns"
+    # The packages built into the app are MIT licensed, and their notices travel with every copy.
+    mkdir -p "$app/Contents/Resources/Licenses"
+    cp -X .build/checkouts/Sparkle/LICENSE "$app/Contents/Resources/Licenses/Sparkle.txt"
+    cp -X .build/checkouts/KeyboardShortcuts/license "$app/Contents/Resources/Licenses/KeyboardShortcuts.txt"
     # SwiftPM resource bundles (a package's localized strings) go where Bundle.module looks first;
     # a missing one stops the app the moment the package needs it.
     local resources
