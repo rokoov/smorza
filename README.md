@@ -12,14 +12,26 @@ process taps that macOS 14.4 and later provide. Smorza was called Volume Mixer u
   device from the button that appears next to its slider, or right-click the row. If the device goes away the app
   plays on the default output, and it moves back when the device returns
 - Volumes are remembered per app and per device: 40% on the speakers, 100% in the headphones
-- Level meters under the sliders of the apps that go through the mixer, while the panel is open
+- Level meters under the sliders of the apps that go through the mixer, while the panel is open; a small dot
+  marks the apps that play without it
+- Pin an app (right-click its row) to keep it in the list while it is quiet or not even running, so it can be set
+  before it plays. Playing apps come first, then pinned ones, then the ones that played last
+- Scroll over a row to change its volume; a focused slider moves 5% with the arrow keys, 1% with Shift. Every
+  slider and button has a VoiceOver label
 - Option-click an app's speaker to play it solo; Option-click again to bring the others back
-- Control + volume keys change the app in front instead of the whole Mac, with a small overlay (needs the
-  Accessibility permission, asked for when you turn it on)
+- An output priority list in Settings: the first connected device in your order becomes the output, each
+  device keeps its own volume, and a small overlay says where sound went ("AirPods Pro, 40%")
+- Mute All, from the panel or with Control-Option-M anywhere (change it in Settings); pressing it again gives
+  every app its own mute back
+- The volume keys can change the app in front instead of the whole Mac, with a small overlay showing its level;
+  Option + the keys still change the Mac's volume (needs the Accessibility permission, asked for when you turn
+  it on in Settings)
 - Browsers and Electron apps play sound from helper processes; those fold into their app (Chrome, Safari, Discord)
 - Apps at 100% on the default output are never touched. Only apps you turn down, mute or send to another device
   go through the mixer
 - Updates itself: checks once a day and asks before installing
+- A small settings window, behind the gear in the panel: open at login, shortcuts, the volume keys, the output
+  order, updates
 - Universal app for Apple silicon and Intel Macs
 
 <picture>
@@ -53,7 +65,8 @@ at full volume.
 ## Build from source
 
 Needs macOS 14.4 or later and Swift 5.9 or later. The Command Line Tools are enough (`xcode-select --install`).
-The first build fetches [Sparkle](https://sparkle-project.org) through SwiftPM.
+The first build fetches [Sparkle](https://sparkle-project.org) and
+[KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts) through SwiftPM.
 
 ```sh
 scripts/build.sh            # builds build/Smorza.app for this Mac
@@ -133,8 +146,8 @@ Quit Smorza from its panel, delete it from Applications and, if you like, remove
 
 ## Debugging
 
-To report a problem, right-click the version at the bottom of the panel, choose **Copy Diagnostics** and paste
-the result into an issue. It lists the versions, the Mac's model, the output devices, the apps you changed or that
+To report a problem, open Settings (the gear in the panel), right-click the version under Updates, choose
+**Copy Diagnostics** and paste the result into an issue. It lists the versions, the Mac's model, the output devices, the apps you changed or that
 are playing, and the mixer's recent log. Nothing is sent anywhere.
 
 ```sh
@@ -144,6 +157,12 @@ are playing, and the mixer's recent log. Nothing is sent anywhere.
 ```
 
 `--snapshot-demo <dir>` renders the panel with sample apps and devices; it made the screenshots above.
+
+## Credits
+
+Smorza uses [Sparkle](https://sparkle-project.org) for its updates and
+[KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts) for its shortcuts, both MIT licensed. Their
+licences come with the app, in `Smorza.app/Contents/Resources/Licenses`.
 
 ## License
 

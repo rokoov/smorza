@@ -11,5 +11,8 @@ struct SmorzaApp: App {
                 .accessibilityLabel("Smorza")
         }
         .menuBarExtraStyle(.window)
+        Settings {
+            SettingsView(model: appDelegate.model, updater: appDelegate.updater)
+        }
     }
 }

@@ -4,6 +4,8 @@ import SwiftUI
 /// A speaker that shows the volume and toggles mute; muted turns it orange and crossed out. With
 /// `onSolo`, an Option-click plays the app solo instead.
 struct MuteButton: View {
+    /// The app or device it mutes, for VoiceOver.
+    let name: String
     let isMuted: Bool
     let volume: Double
     var onSolo: (() -> Void)?
@@ -19,7 +21,7 @@ struct MuteButton: View {
         }
         .buttonStyle(.borderless)
         .help(helpText)
-        .accessibilityLabel(isMuted ? "Unmute" : "Mute")
+        .accessibilityLabel(isMuted ? "Unmute \(name)" : "Mute \(name)")
     }
 
     private var helpText: String {

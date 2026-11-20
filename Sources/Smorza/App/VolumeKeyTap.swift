@@ -2,8 +2,9 @@ import AppKit
 import CoreGraphics
 import IOKit.hidsystem
 
-/// Catches the volume keys while Control is held, through a session event tap, and lets every other
-/// key through untouched. Creating it needs the Accessibility permission.
+/// Catches the volume keys through a session event tap and lets every other key through untouched.
+/// With Option held a volume key goes on to the system, as plain volume key, so Option keeps the
+/// Mac's volume in reach. Creating the tap needs the Accessibility permission.
 @MainActor
 final class VolumeKeyTap {
     enum Key {
@@ -19,12 +20,13 @@ final class VolumeKeyTap {
     /// Key state in a media key event's data: 0xA is down, 0xB is up.
     private static let keyDownState = 0xA
 
-    private let handler: (_ key: Key, _ isFine: Bool) -> Void
+    /// Gets every press and release of a volume key; returns false to leave it to the system.
+    private let handler: (_ key: Key, _ isPressed: Bool, _ isFine: Bool) -> Bool
     private var machPort: CFMachPort?
     private var source: CFRunLoopSource?
 
     /// Nil when the system refuses the tap, which means the permission is missing.
-    init?(handler: @escaping (_ key: Key, _ isFine: Bool) -> Void) {
+    init?(handler: @escaping (_ key: Key, _ isPressed: Bool, _ isFine: Bool) -> Bool) {
         self.handler = handler
         guard
             let port = CGEvent.tapCreate(
@@ -69,17 +71,21 @@ final class VolumeKeyTap {
             return Unmanaged.passUnretained(event)
         }
         guard type.rawValue == Self.systemDefinedType,
-            event.flags.contains(.maskControl),
             let mediaEvent = NSEvent(cgEvent: event),
             mediaEvent.subtype.rawValue == Self.mediaKeySubtype,
             let key = Self.key(forCode: Int32((mediaEvent.data1 & 0xFFFF_0000) >> 16))
         else { return Unmanaged.passUnretained(event) }
 
-        if (mediaEvent.data1 & 0xFF00) >> 8 == Self.keyDownState {
-            handler(key, event.flags.contains(.maskShift))
+        if event.flags.contains(.maskAlternate) {
+            // Option with a volume key would open Sound settings; without it the system changes
+            // its own volume, which is what Option asks for here.
+            event.flags.remove(.maskAlternate)
+            return Unmanaged.passUnretained(event)
         }
-        // Both the press and the release are kept from the system, so its own volume stays put.
-        return nil
+        let isPressed = (mediaEvent.data1 & 0xFF00) >> 8 == Self.keyDownState
+        // A key the handler takes is kept from the system, press and release, so its own volume
+        // stays put.
+        return handler(key, isPressed, event.flags.contains(.maskShift)) ? nil : Unmanaged.passUnretained(event)
     }
 
     private static func key(forCode code: Int32) -> Key? {

@@ -13,7 +13,10 @@ source scripts/bundle.sh
 
 APP="build/Smorza.app"
 products=$(swift build -c release --show-bin-path)
-staged=$(make_app "$products/Smorza" "$products/Sparkle.framework")
+shopt -s nullglob
+resources=("$products"/*.bundle)
+shopt -u nullglob
+staged=$(make_app "$products/Smorza" "$products/Sparkle.framework" ${resources[@]+"${resources[@]}"})
 sign_app "$staged"
 deliver_app "$staged" "$APP"
 echo "Built $APP"

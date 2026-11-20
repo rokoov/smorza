@@ -39,6 +39,11 @@ enum PanelSnapshot {
             )
             if demo {
                 write(render(DemoContent.hud.padding(margin), appearance: appearance), as: "hud-\(name)", in: directory)
+                write(
+                    render(SettingsView(model: model, updater: updater), appearance: appearance),
+                    as: "settings-\(name)",
+                    in: directory
+                )
             }
         }
     }

@@ -52,12 +52,16 @@ for arch in arm64 x86_64; do
     # Copied at once: some SwiftPM versions put both architectures in the same output folder.
     cp -X "$products/Smorza" "$work/Smorza-$arch"
     binaries+=("$work/Smorza-$arch")
-    # Sparkle ships one universal framework, the same for both builds.
+    # Sparkle ships one universal framework, the same for both builds, and resource bundles hold
+    # no code.
     sparkle="$products/Sparkle.framework"
+    shopt -s nullglob
+    resources=("$products"/*.bundle)
+    shopt -u nullglob
 done
 joined="$work/Smorza"
 lipo -create "${binaries[@]}" -output "$joined"
-staged=$(make_app "$joined" "$sparkle")
+staged=$(make_app "$joined" "$sparkle" ${resources[@]+"${resources[@]}"})
 rm -rf "$work"
 sign_app "$staged"
 
