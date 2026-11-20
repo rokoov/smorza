@@ -12,7 +12,10 @@ process taps that macOS 14.4 and later provide. Smorza was called Volume Mixer u
   device from the button that appears next to its slider, or right-click the row. If the device goes away the app
   plays on the default output, and it moves back when the device returns
 - Volumes are remembered per app and per device: 40% on the speakers, 100% in the headphones
-- Level meters under the sliders of the apps that go through the mixer, while the panel is open
+- Level meters under the sliders of the apps that go through the mixer, while the panel is open; a small dot
+  marks the apps that play without it
+- Pin an app (right-click its row) to keep it in the list while it is quiet or not even running, so it can be set
+  before it plays. Playing apps come first, then pinned ones, then the ones that played last
 - Scroll over a row to change its volume; a focused slider moves 5% with the arrow keys, 1% with Shift. Every
   slider and button has a VoiceOver label
 - Option-click an app's speaker to play it solo; Option-click again to bring the others back

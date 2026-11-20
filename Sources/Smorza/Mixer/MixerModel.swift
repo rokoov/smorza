@@ -42,6 +42,8 @@ final class MixerModel {
     @ObservationIgnored private let hud = VolumeHUD()
     @ObservationIgnored private var identities: [AudioObjectID: AppIdentity] = [:]
     @ObservationIgnored private var listedKeys: Set<String> = []
+    /// When each app was last seen playing, for the order of the quiet rows.
+    @ObservationIgnored private var lastPlayed: [String: Date] = [:]
     @ObservationIgnored private var rowSummary: [String] = []
     @ObservationIgnored private var isPanelVisible = false
     @ObservationIgnored private var isDemo = false
@@ -117,6 +119,15 @@ final class MixerModel {
         let current = volumeScale.clamped(store.volume(for: key, on: outputDeviceUID(for: key)).volume)
         let position = min(max(volumeScale.position(of: current) + change, 0), 1)
         setVolume(volumeScale.volume(atPosition: position), for: key)
+    }
+
+    /// Keeps an app's row while it is quiet or not running, or lets it go again.
+    func togglePin(for key: String) {
+        let isPinned = !store.settings(for: key).isPinned
+        store.setPinned(isPinned, for: key)
+        let name = entries.first { $0.id == key }?.name ?? key
+        log.notice("\(isPinned ? "Pinned" : "Unpinned", privacy: .public) \(name, privacy: .public)")
+        rebuildEntries(from: currentApps())
     }
 
     func toggleMute(for key: String) {
@@ -373,10 +384,17 @@ final class MixerModel {
         guard !isDemo else { return }
         // Once an app has a row it keeps it until it quits, so pausing it or dragging it back to
         // 100% never pulls the row away in the middle of an adjustment.
+        let now = Date()
+        for app in apps where app.isPlaying {
+            lastPlayed[app.key] = now
+        }
         listedKeys.formIntersection(apps.map(\.key))
-        let shown = apps.filter { $0.isPlaying || $0.needsRoute || listedKeys.contains($0.key) }
+        let pinned = Set(store.pinnedApps)
+        let shown = apps.filter {
+            $0.isPlaying || $0.needsRoute || listedKeys.contains($0.key) || pinned.contains($0.key)
+        }
         listedKeys.formUnion(shown.map(\.key))
-        let rows = shown.map { app in
+        let running = shown.map { app in
             MixerEntry(
                 id: app.key,
                 name: app.identity.name,
@@ -388,14 +406,48 @@ final class MixerModel {
                 outputDeviceName: app.settings.outputDeviceName,
                 outputSymbol: app.outputSymbol,
                 isOutputConnected: app.settings.outputDeviceUID == nil || app.chosenDevice != nil,
-                isSolo: app.key == solo?.key
+                isSolo: app.key == solo?.key,
+                isPinned: pinned.contains(app.key),
+                isRouted: app.needsRoute
             )
         }
-        let ordered = RowOrder.arrange(rows, keepingPlacesOf: isPanelVisible ? entries.map(\.id) : nil)
+        let rows = running + pinnedRows(for: pinned.subtracting(apps.map(\.key)))
+        let ordered = RowOrder.arrange(
+            rows,
+            lastPlayed: lastPlayed,
+            keepingPlacesOf: isPanelVisible ? entries.map(\.id) : nil
+        )
         if ordered != entries {
             entries = ordered
         }
         logRows(ordered)
+    }
+
+    /// Rows for pinned apps that are not running, from their saved settings, so they can be set
+    /// before they start.
+    private func pinnedRows(for keys: Set<String>) -> [MixerEntry] {
+        let connected = Set(output.devices.map(\.uid))
+        return keys.compactMap { key in
+            guard let identity = resolver.identity(forBundleIdentifier: key) else { return nil }
+            let settings = store.settings(for: key)
+            let deviceUID = settings.outputDeviceUID(systemOutputUID: output.deviceUID, connectedUIDs: connected)
+            var volume = settings.volume(on: deviceUID)
+            volume.volume = volumeScale.clamped(volume.volume)
+            return MixerEntry(
+                id: key,
+                name: identity.name,
+                icon: identity.icon,
+                volume: volume.volume,
+                isMuted: volume.isMuted,
+                isPlaying: false,
+                outputDeviceUID: settings.outputDeviceUID,
+                outputDeviceName: settings.outputDeviceName,
+                outputSymbol: output.device(withUID: deviceUID)?.symbolName ?? output.symbolName,
+                isOutputConnected: settings.outputDeviceUID.map(connected.contains) ?? true,
+                isPinned: true,
+                isRunning: false
+            )
+        }
     }
 
     private func logRows(_ rows: [MixerEntry]) {

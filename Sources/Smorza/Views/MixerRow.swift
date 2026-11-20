@@ -14,6 +14,8 @@ struct MixerRow<Icon: View, Accessory: View, Meter: View>: View {
     var unityMark: Double?
     /// Colour of the level text: orange for boost, the accent for solo.
     var levelStyle = AnyShapeStyle(.secondary)
+    /// A small symbol after the title, such as the pin of a pinned app, with what it says.
+    var titleSymbol: (name: String, label: String)?
     let isMuted: Bool
     let isEnabled: Bool
     let onChange: (Double) -> Void
@@ -34,6 +36,12 @@ struct MixerRow<Icon: View, Accessory: View, Meter: View>: View {
                     Text(title)
                         .lineLimit(1)
                         .truncationMode(.tail)
+                    if let titleSymbol {
+                        Image(systemName: titleSymbol.name)
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                            .accessibilityLabel(titleSymbol.label)
+                    }
                     Spacer(minLength: 8)
                     Text(level)
                         .font(.caption)

@@ -286,10 +286,12 @@ do {
     expect(defaults.data(forKey: "Settings") == newer, "a newer settings format is left untouched")
 }
 
-// Row order: playing apps first, then by name; open panels keep rows in place.
+// Row order: playing apps first, then pinned, then by when they last played; open panels keep rows
+// in place.
 struct Row: MixerRowItem {
     let id: String
     let isPlaying: Bool
+    var isPinned = false
     var name: String { id }
 }
 
@@ -313,6 +315,41 @@ do {
         "rows on screen hold their places, new ones follow: \(held)"
     )
     expect(RowOrder.arrange([Row]()).isEmpty, "no rows stays no rows")
+
+    let now = Date()
+    let mixed = [
+        Row(id: "zoom", isPlaying: false, isPinned: true),
+        Row(id: "Discord", isPlaying: false),
+        Row(id: "Music", isPlaying: false),
+        Row(id: "Spotify", isPlaying: true),
+        Row(id: "Arc", isPlaying: false),
+        Row(id: "Slack", isPlaying: true, isPinned: true),
+    ]
+    let recent = RowOrder.arrange(
+        mixed,
+        lastPlayed: ["Music": now, "Discord": now.addingTimeInterval(-60), "zoom": now.addingTimeInterval(-5)]
+    ).map(\.id)
+    expect(
+        recent == ["Slack", "Spotify", "zoom", "Music", "Discord", "Arc"],
+        "playing, then pinned, then most recently played, then never played: \(recent)"
+    )
+}
+
+// Pins: a pinned app is kept even at 100% on the system output, and old saves load unpinned.
+do {
+    expect(!AppSettings(isPinned: true).isDefault, "a pinned app is worth keeping")
+    let old = Data(#"{"volumes":{},"lastVolume":{"volume":0.5,"isMuted":false}}"#.utf8)
+    let decoded = try? JSONDecoder().decode(AppSettings.self, from: old)
+    expect(decoded?.isPinned == false, "a save from before pins loads unpinned")
+    let defaults = UserDefaults(suiteName: "pins-check")!
+    defaults.removePersistentDomain(forName: "pins-check")
+    let store = MixerSettingsStore(defaults: defaults)
+    store.setPinned(true, for: "us.zoom.xos")
+    expect(store.pinnedApps == ["us.zoom.xos"], "a pin is saved")
+    expect(MixerSettingsStore(defaults: defaults).pinnedApps == ["us.zoom.xos"], "and loads again")
+    store.setPinned(false, for: "us.zoom.xos")
+    expect(store.pinnedApps.isEmpty, "unpinning an untouched app forgets it")
+    defaults.removePersistentDomain(forName: "pins-check")
 }
 
 // Solo: everyone else muted, and each app's own mute back afterwards.

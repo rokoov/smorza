@@ -113,6 +113,7 @@ struct MixerPanel: View {
                     onToggleMute: { model.toggleMute(for: entry.id) },
                     onSolo: { model.toggleSolo(for: entry.id) },
                     onChooseOutput: { model.setOutputDevice($0, for: entry.id) },
+                    onTogglePin: { model.togglePin(for: entry.id) },
                     onHover: { hover(entry.id, isInside: $0) }
                 )
                 .transition(.opacity.combined(with: .move(edge: .top)))

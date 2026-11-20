@@ -12,6 +12,7 @@ struct AppRow: View {
     let onToggleMute: () -> Void
     let onSolo: () -> Void
     let onChooseOutput: (OutputDevice?) -> Void
+    let onTogglePin: () -> Void
     /// Tells the panel which row the pointer is over, for scrolling.
     let onHover: (Bool) -> Void
     @State private var isHovered = false
@@ -24,6 +25,7 @@ struct AppRow: View {
             volume: entry.volume,
             unityMark: scale.allowsBoost ? scale.unityPosition : nil,
             levelStyle: levelStyle,
+            titleSymbol: entry.isPinned ? (name: "pin.fill", label: "Pinned") : nil,
             isMuted: entry.isMuted,
             isEnabled: true,
             onChange: setPosition,
@@ -43,7 +45,13 @@ struct AppRow: View {
                 .interpolation(.high)
                 .saturation(entry.isPlaying ? 1 : 0)
                 .opacity(entry.isPlaying ? 1 : 0.6)
-                .help(entry.isPlaying ? "Playing" : "Quiet right now")
+                .overlay(alignment: .bottomTrailing) {
+                    // A routed app shows its level under the slider; the others get a dot.
+                    if entry.isPlaying, !entry.isRouted {
+                        ActivityDot()
+                    }
+                }
+                .help(activity)
         }
         .onHover { isInside in
             isHovered = isInside
@@ -52,6 +60,7 @@ struct AppRow: View {
         .contextMenu {
             Button(entry.isSolo ? "End Solo" : "Play Solo", action: onSolo)
             Button(entry.isMuted ? "Unmute" : "Mute", action: onToggleMute)
+            Button(entry.isPinned ? "Unpin" : "Pin", action: onTogglePin)
             Divider()
             Menu("Output") {
                 AppOutputChoices(
@@ -62,6 +71,11 @@ struct AppRow: View {
                 )
             }
         }
+    }
+
+    private var activity: String {
+        if !entry.isRunning { return "Not running" }
+        return entry.isPlaying ? "Playing" : "Quiet right now"
     }
 
     private var level: String {

@@ -19,11 +19,23 @@ final class AppResolver {
     private static let genericIcon = NSWorkspace.shared.icon(for: .unixExecutable)
 
     private var cache: [pid_t: AppIdentity] = [:]
+    private var bundleCache: [String: AppIdentity] = [:]
 
     func identity(for client: AudioClient) -> AppIdentity {
         if let cached = cache[client.pid] { return cached }
         let identity = resolve(pid: client.pid, bundleID: client.bundleID)
         cache[client.pid] = identity
+        return identity
+    }
+
+    /// A pinned app that is not running, named and drawn from its bundle. Nil once it is no longer
+    /// installed, or for a process without a bundle.
+    func identity(forBundleIdentifier bundleID: String) -> AppIdentity? {
+        if let cached = bundleCache[bundleID] { return cached }
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return nil }
+        let name = (FileManager.default.displayName(atPath: url.path) as NSString).deletingPathExtension
+        let identity = AppIdentity(key: bundleID, name: name, icon: NSWorkspace.shared.icon(forFile: url.path))
+        bundleCache[bundleID] = identity
         return identity
     }
 

@@ -80,6 +80,15 @@ public final class MixerSettingsStore {
         update(app) { $0.volumes[deviceUID] = settings.lastVolume ?? AppVolume() }
     }
 
+    /// The apps whose rows stay while they are quiet or not running.
+    public var pinnedApps: [String] {
+        apps.filter { $0.value.isPinned }.keys.sorted()
+    }
+
+    public func setPinned(_ isPinned: Bool, for app: String) {
+        update(app) { $0.isPinned = isPinned }
+    }
+
     public func setOutputDevice(uid: String?, name: String?, for app: String) {
         update(app) { settings in
             settings.outputDeviceUID = uid
