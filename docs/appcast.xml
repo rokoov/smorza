@@ -7,6 +7,26 @@
     <language>en</language>
     <!-- scripts/appcast.sh adds each release below this line, newest first -->
     <item>
+      <title>Version 0.3.0</title>
+      <pubDate>Fri, 20 Nov 2026 08:50:08 +0000</pubDate>
+      <sparkle:version>4</sparkle:version>
+      <sparkle:shortVersionString>0.3.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.4</sparkle:minimumSystemVersion>
+      <sparkle:fullReleaseNotesLink>https://github.com/rokoov/smorza/releases/tag/v0.3.0</sparkle:fullReleaseNotesLink>
+      <description sparkle:descriptionFormat="plain-text"><![CDATA[Smorza 0.3.0
+
+- A settings window behind the gear in the panel
+- The volume keys can change the app in front; Option + the keys still change the Mac's volume
+- Scroll over a row to change its volume, and move a focused slider with the arrow keys
+- Pin an app to keep it in the list while it is quiet, so you can set it before it plays
+- Mute All, from the panel or with Control-Option-M anywhere
+- An output priority list: the first connected device becomes the output, and each device keeps its own volume
+- A small overlay when the output changes
+
+If you use the volume keys, macOS may ask for Accessibility again after this update.]]></description>
+      <enclosure url="https://github.com/rokoov/smorza/releases/download/v0.3.0/Smorza-0.3.0.zip" type="application/octet-stream" sparkle:edSignature="xpVnOeH+quvhmYO6VxkXagdFyHuDagQxXEsmwBqE7tz2KiSq5DbswJ8R4AE/jtB7Kfjn1gMiCP0JhOYwOv0NDw==" length="2355011" />
+    </item>
+    <item>
       <title>Version 0.2.1</title>
       <pubDate>Thu, 19 Nov 2026 23:38:46 +0000</pubDate>
       <sparkle:version>3</sparkle:version>
