@@ -31,12 +31,12 @@ process taps that macOS 14.4 and later provide. Smorza was called Volume Mixer u
 
 Needs macOS 14.4 Sonoma or later.
 
-1. Download `Smorza-<version>.zip` from [Releases](../../releases), unzip it and move **Smorza** to
-   Applications.
-2. Open it. macOS says it cannot check Smorza for malware, because Smorza is not signed with a paid Apple
-   Developer ID. Click **Done**, then open **System Settings → Privacy & Security**, scroll down and click
-   **Open Anyway** next to Smorza. If you prefer the terminal:
-   `xattr -dr com.apple.quarantine /Applications/Smorza.app`
+1. Download `Smorza-<version>.dmg` from [smorza.app](https://smorza.app) or [Releases](../../releases). Open it
+   and drag **Smorza** to **Applications**.
+2. Open Smorza. It is not notarized by Apple yet, so the first launch needs one extra step:
+   - macOS 15 Sequoia and later: open Smorza once and close the warning. Then go to **System Settings →
+     Privacy & Security** and click **Open Anyway**.
+   - macOS 14 Sonoma: right-click Smorza in Applications, choose **Open**, then **Open** again.
 3. Click the sliders icon in the menu bar. The first time you turn an app down, macOS asks to let Smorza record
    system audio. Click **Allow**: that is how an app's sound reaches the mixer. Nothing is recorded or saved. The
    only network traffic is the daily update check, which reads the release feed on smorza.app.
@@ -61,7 +61,7 @@ scripts/build.sh run        # builds and launches it
 scripts/build.sh install    # copies it to /Applications and launches it
 scripts/format.sh           # formats the code with swift-format
 scripts/check.sh            # formatting, build without warnings, core checks, bundle checks
-scripts/release.sh          # universal app zipped for a release
+scripts/release.sh          # universal app as a zip (for updates) and a .dmg, for a release
 scripts/appcast.sh <zip>    # signs a release zip and adds it to the update feed
 ```
 
