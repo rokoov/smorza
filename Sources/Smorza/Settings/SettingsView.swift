@@ -12,6 +12,7 @@ struct SettingsView: View {
             GeneralSettings()
             ShortcutSettings()
             VolumeKeysSettings(volumeKeys: model.volumeKeys)
+            OutputSettings(model: model)
             UpdateSettings(updater: updater, onCopyDiagnostics: model.copyDiagnostics)
         }
         .formStyle(.grouped)

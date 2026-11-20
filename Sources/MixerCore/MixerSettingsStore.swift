@@ -4,18 +4,21 @@ import Foundation
 public final class MixerSettingsStore {
     /// Format written by this build. A newer one on disk is left alone, so going back to an older
     /// build never overwrites what a newer one saved.
-    public static let currentVersion = 3
+    public static let currentVersion = 4
 
     private struct Saved: Codable {
         var version: Int
         var apps: [String: AppSettings]
         /// Added in version 3; earlier saves have none.
         var profiles: [Profile]
+        /// Added in version 4, with pinned apps.
+        var outputPriority: OutputPriority
 
-        init(version: Int, apps: [String: AppSettings], profiles: [Profile]) {
+        init(version: Int, apps: [String: AppSettings], profiles: [Profile], outputPriority: OutputPriority) {
             self.version = version
             self.apps = apps
             self.profiles = profiles
+            self.outputPriority = outputPriority
         }
 
         init(from decoder: Decoder) throws {
@@ -23,6 +26,8 @@ public final class MixerSettingsStore {
             version = try container.decode(Int.self, forKey: .version)
             apps = try container.decode([String: AppSettings].self, forKey: .apps)
             profiles = try container.decodeIfPresent([Profile].self, forKey: .profiles) ?? []
+            outputPriority =
+                try container.decodeIfPresent(OutputPriority.self, forKey: .outputPriority) ?? OutputPriority()
         }
     }
 
@@ -30,6 +35,7 @@ public final class MixerSettingsStore {
     private let key: String
     private var apps: [String: AppSettings] = [:]
     public private(set) var profiles: [Profile] = []
+    public private(set) var outputPriority = OutputPriority()
     private var isReadOnly = false
 
     /// Where the settings live in the app's own defaults.
@@ -47,6 +53,7 @@ public final class MixerSettingsStore {
         if let data = defaults.data(forKey: key), let saved = try? JSONDecoder().decode(Saved.self, from: data) {
             apps = saved.apps
             profiles = saved.profiles
+            outputPriority = saved.outputPriority
             isReadOnly = saved.version > Self.currentVersion
         } else if let data = defaults.data(forKey: legacyKey),
             let legacy = try? JSONDecoder().decode([String: AppVolume].self, from: data)
@@ -96,6 +103,12 @@ public final class MixerSettingsStore {
         }
     }
 
+    public func setOutputPriority(_ priority: OutputPriority) {
+        guard priority != outputPriority else { return }
+        outputPriority = priority
+        save()
+    }
+
     /// Adds the profile, or replaces the one with the same id.
     public func saveProfile(_ profile: Profile) {
         if let index = profiles.firstIndex(where: { $0.id == profile.id }) {
@@ -120,7 +133,9 @@ public final class MixerSettingsStore {
 
     private func save() {
         guard !isReadOnly,
-            let data = try? JSONEncoder().encode(Saved(version: Self.currentVersion, apps: apps, profiles: profiles))
+            let data = try? JSONEncoder().encode(
+                Saved(version: Self.currentVersion, apps: apps, profiles: profiles, outputPriority: outputPriority)
+            )
         else { return }
         defaults.set(data, forKey: key)
     }

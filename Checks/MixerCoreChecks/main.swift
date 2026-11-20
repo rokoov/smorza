@@ -343,6 +343,46 @@ do {
     expect(MuteAllSession(mutesBefore: [:]).mutes.isEmpty, "with no apps there is nothing to mute")
 }
 
+// Output priority: the first connected device in the user's order, each device with its volume.
+do {
+    var priority = OutputPriority()
+    let speakers = OutputPriority.Device(uid: "speakers", name: "Speakers")
+    let airpods = OutputPriority.Device(uid: "airpods", name: "AirPods Pro")
+    let display = OutputPriority.Device(uid: "display", name: "Studio Display")
+    expect(priority.learn([speakers, airpods]), "new devices are learned")
+    expect(priority.preferredDevice(among: ["speakers", "airpods"]) == nil, "nothing switches while it is off")
+    priority.isEnabled = true
+    expect(priority.preferredDevice(among: ["speakers", "airpods"]) == "speakers", "the first in the list wins")
+    priority.move("airpods", by: -1)
+    expect(priority.devices.map(\.uid) == ["airpods", "speakers"], "a device moves up")
+    expect(priority.preferredDevice(among: ["speakers", "airpods"]) == "airpods", "and now wins")
+    expect(priority.preferredDevice(among: ["speakers"]) == "speakers", "until it is unplugged")
+    expect(priority.preferredDevice(among: ["usb"]) == nil, "an unlisted device is left to macOS")
+    priority.move("airpods", by: -5)
+    expect(priority.devices.first?.uid == "airpods", "moving past the top stops there")
+    expect(priority.learn([display]), "a new device joins")
+    expect(priority.devices.last?.uid == "display", "at the end")
+    expect(!priority.learn([airpods]), "a known device changes nothing")
+    priority.learn([OutputPriority.Device(uid: "airpods", name: "Roko's AirPods")])
+    expect(priority.devices.first?.name == "Roko's AirPods", "a renamed device keeps its place")
+    priority.volumes["display"] = 0.3
+    priority.forget("display")
+    expect(priority.devices.count == 2 && priority.volumes["display"] == nil, "a forgotten device goes with its volume")
+
+    let defaults = UserDefaults(suiteName: "priority-check")!
+    defaults.removePersistentDomain(forName: "priority-check")
+    let store = MixerSettingsStore(defaults: defaults)
+    store.setOutputPriority(priority)
+    expect(MixerSettingsStore(defaults: defaults).outputPriority == priority, "the order is saved and loads again")
+    let version3 = #"{"version":3,"apps":{},"profiles":[]}"#
+    defaults.set(Data(version3.utf8), forKey: "Settings")
+    expect(
+        MixerSettingsStore(defaults: defaults).outputPriority == OutputPriority(),
+        "a version 3 save loads with it off"
+    )
+    defaults.removePersistentDomain(forName: "priority-check")
+}
+
 // Pins: a pinned app is kept even at 100% on the system output, and old saves load unpinned.
 do {
     expect(!AppSettings(isPinned: true).isDefault, "a pinned app is worth keeping")
@@ -394,7 +434,7 @@ do {
     let version2 = #"{"version":2,"apps":{"spotify":{"volumes":{},"lastVolume":{"volume":0.4,"isMuted":false}}}}"#
     defaults.set(Data(version2.utf8), forKey: "Settings")
     let store = MixerSettingsStore(defaults: defaults)
-    expect(store.volume(for: "spotify", on: "x").volume == 0.4, "a version 2 save loads into version 3")
+    expect(store.volume(for: "spotify", on: "x").volume == 0.4, "a version 2 save loads into the current one")
     expect(store.profiles.isEmpty, "a version 2 save has no profiles")
     store.saveProfile(meeting)
     var renamed = meeting

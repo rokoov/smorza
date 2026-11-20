@@ -19,6 +19,8 @@ process taps that macOS 14.4 and later provide. Smorza was called Volume Mixer u
 - Scroll over a row to change its volume; a focused slider moves 5% with the arrow keys, 1% with Shift. Every
   slider and button has a VoiceOver label
 - Option-click an app's speaker to play it solo; Option-click again to bring the others back
+- An output priority list in Settings: the first connected device in your order becomes the output, each
+  device keeps its own volume, and a small overlay says where sound went ("AirPods Pro, 40%")
 - Mute All, from the panel or with Control-Option-M anywhere (change it in Settings); pressing it again gives
   every app its own mute back
 - The volume keys can change the app in front instead of the whole Mac, with a small overlay showing its level;
@@ -28,7 +30,8 @@ process taps that macOS 14.4 and later provide. Smorza was called Volume Mixer u
 - Apps at 100% on the default output are never touched. Only apps you turn down, mute or send to another device
   go through the mixer
 - Updates itself: checks once a day and asks before installing
-- A small settings window, behind the gear in the panel: open at login, the volume keys, updates
+- A small settings window, behind the gear in the panel: open at login, shortcuts, the volume keys, the output
+  order, updates
 - Universal app for Apple silicon and Intel Macs
 
 <picture>

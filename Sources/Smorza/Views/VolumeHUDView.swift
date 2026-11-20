@@ -19,6 +19,7 @@ struct VolumeHUDView: View {
         HStack(spacing: 10) {
             Image(nsImage: icon)
                 .resizable()
+                .scaledToFit()
                 .frame(width: PanelMetrics.iconSize, height: PanelMetrics.iconSize)
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .firstTextBaseline) {

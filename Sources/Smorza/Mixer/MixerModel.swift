@@ -28,6 +28,8 @@ final class MixerModel {
     private(set) var solo: SoloSession?
     /// Every app in the mixer muted by Mute All.
     private(set) var muteAll: MuteAllSession?
+    /// The user's order of output devices, for automatic switching.
+    private(set) var outputPriority = OutputPriority()
     let output = SystemOutput()
     /// How far the sliders go: to 100%, or to 200% where boost is on.
     let volumeScale = ProFeatures.volumeScale
@@ -47,6 +49,8 @@ final class MixerModel {
     @ObservationIgnored private var listedKeys: Set<String> = []
     /// When each app was last seen playing, for the order of the quiet rows.
     @ObservationIgnored private var lastPlayed: [String: Date] = [:]
+    /// False until the first output device is read, so starting up shows no overlay.
+    @ObservationIgnored private var hasLoadedOutput = false
     @ObservationIgnored private var rowSummary: [String] = []
     @ObservationIgnored private var isPanelVisible = false
     @ObservationIgnored private var isDemo = false
@@ -64,10 +68,14 @@ final class MixerModel {
         monitor.onChange = { [weak self] in self?.clientsChanged() }
         output.onDeviceChange = { [weak self] in self?.outputDeviceChanged() }
         output.onDevicesChange = { [weak self] in self?.outputDevicesChanged() }
+        output.onLevelsChange = { [weak self] in self?.outputLevelsChanged() }
+        outputPriority = store.outputPriority
         capture.onFinish = { [weak self] in self?.syncRoutes() }
         routes.onRetry = { [weak self] in self?.syncRoutes() }
         routes.onRoutesChanged = { [weak self] in self?.updateBackgroundWork() }
         output.start()
+        hasLoadedOutput = true
+        applyOutputPriority()
         monitor.start()
         listenForServiceRestart()
         profilesChanged()
@@ -231,6 +239,28 @@ final class MixerModel {
         store.setOutputDevice(uid: device?.uid, name: device?.name, for: key)
         routes.clearFailures(for: key)
         syncRoutes()
+    }
+
+    /// Turns automatic switching to the first connected device of the user's order on or off.
+    func setOutputSwitching(_ isEnabled: Bool) {
+        outputPriority.isEnabled = isEnabled
+        if isEnabled {
+            rememberOutputVolume()
+        }
+        store.setOutputPriority(outputPriority)
+        applyOutputPriority()
+    }
+
+    /// Moves a device up (negative) or down (positive) the user's order.
+    func moveOutputDevice(_ uid: String, by offset: Int) {
+        outputPriority.move(uid, by: offset)
+        store.setOutputPriority(outputPriority)
+        applyOutputPriority()
+    }
+
+    func forgetOutputDevice(_ uid: String) {
+        outputPriority.forget(uid)
+        store.setOutputPriority(outputPriority)
     }
 
     func retryCaptureCheck() {
@@ -504,6 +534,16 @@ final class MixerModel {
 
     private func outputDeviceChanged() {
         capture.outputDeviceChanged(to: output.deviceID)
+        // Each device keeps its own volume, for devices that do not keep it themselves.
+        if outputPriority.isEnabled, output.canSetVolume,
+            let volume = outputPriority.volumes[output.deviceUID], abs(volume - output.volume) > 0.005
+        {
+            output.setVolume(volume)
+        }
+        // In the panel the switch is in plain sight; elsewhere the overlay says where sound went.
+        if hasLoadedOutput, !isPanelVisible {
+            showOutputOverlay()
+        }
         // Routes still on the old device are replaced by the next sync.
         syncRoutes()
     }
@@ -512,7 +552,53 @@ final class MixerModel {
     /// routes whose device changed are rebuilt, each new one starting before the old one goes.
     private func outputDevicesChanged() {
         log.notice("Output devices changed: \(self.output.devices.count) connected")
+        let seen = output.devices.map { OutputPriority.Device(uid: $0.uid, name: $0.name) }
+        if outputPriority.learn(seen) {
+            store.setOutputPriority(outputPriority)
+        }
+        applyOutputPriority()
         syncRoutes()
+    }
+
+    /// Makes the first connected device of the user's order the default output, when it is not.
+    /// Only a device coming or going, or a change to the order, switches: a device the user picks
+    /// by hand stays until then.
+    private func applyOutputPriority() {
+        // The device list loads before the current output, and snapshots never change the output.
+        guard hasLoadedOutput, routesAudio,
+            let uid = outputPriority.preferredDevice(among: Set(output.devices.map(\.uid))),
+            uid != output.deviceUID,
+            let device = output.device(withUID: uid)
+        else { return }
+        log.notice("Output priority: switching to \(device.name, privacy: .public)")
+        output.select(device)
+    }
+
+    private func outputLevelsChanged() {
+        if outputPriority.isEnabled {
+            rememberOutputVolume()
+        }
+    }
+
+    private func rememberOutputVolume() {
+        guard !output.deviceUID.isEmpty, output.canSetVolume else { return }
+        outputPriority.volumes[output.deviceUID] = output.volume
+        store.setOutputPriority(outputPriority)
+    }
+
+    private func showOutputOverlay() {
+        let icon = NSImage(systemSymbolName: output.symbolName, accessibilityDescription: nil) ?? NSImage()
+        hud.show(
+            VolumeHUDView(
+                name: output.name,
+                icon: icon,
+                volume: output.volume,
+                isMuted: output.isMuted,
+                scale: .standard,
+                status: output.canSetVolume ? nil : "Fixed volume",
+                showsLevel: output.canSetVolume
+            )
+        )
     }
 
     private func systemDidWake() {
