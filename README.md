@@ -126,8 +126,7 @@ and 0.3% in the mixer. The level meters only run while the panel is open.
 
 ## Roadmap
 
-The mixer stays free. Next for everyone: scroll over a row to change its volume, pinned apps, mute all, an output
-priority list and a small settings window.
+The mixer stays free. Next for everyone: a shortcut that opens the panel, and scrolling on the menu bar icon.
 
 Pro, coming soon, a one-time unlock for automation:
 
@@ -138,6 +137,8 @@ Pro, coming soon, a one-time unlock for automation:
 - Night mode: a gentle compressor on every app for late-night listening
 - A command palette: type "spotify 30" or "discord to airpods"
 - Shortcuts actions and a URL scheme for scripts
+
+Maybe later, if people ask for them: an equalizer per app, trackpad edge gestures, MIDI controllers.
 
 ## Uninstall
 
