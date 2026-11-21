@@ -165,6 +165,10 @@ Smorza uses [Sparkle](https://sparkle-project.org) for its updates and
 [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts) for its shortcuts, both MIT licensed. Their
 licences come with the app, in `Smorza.app/Contents/Resources/Licenses`.
 
+## Support
+
+Smorza is free and always will be. If it saves you a headache, you can [buy me a coffee on Ko-fi](https://ko-fi.com/rokoodev) ☕
+
 ## License
 
 MIT, see [LICENSE](LICENSE).
