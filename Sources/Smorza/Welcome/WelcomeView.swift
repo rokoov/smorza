@@ -8,6 +8,10 @@ struct WelcomeView: View {
     private static let settingsURL = URL(
         string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
     )
+    /// Where the tap is made, for anyone who wants to see what the permission is used for.
+    private static let tapCodeURL = URL(
+        string: "https://github.com/rokoov/smorza/blob/main/Sources/Smorza/CoreAudio/ProcessTap.swift"
+    )
 
     let model: MixerModel
     let onFinish: () -> Void
@@ -40,6 +44,15 @@ struct WelcomeView: View {
             message(
                 "To change an app's volume, Smorza plays the app's sound through itself, which macOS calls System Audio Recording. Smorza uses it only for that: nothing is ever recorded, saved or sent anywhere."
             )
+            if let tapCodeURL = Self.tapCodeURL {
+                Link(destination: tapCodeURL) {
+                    Text("See the code that does this")
+                        .underline()
+                }
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .help(tapCodeURL.absoluteString)
+            }
             Button("Continue") {
                 hasContinued = true
                 model.requestCapturePermission()
