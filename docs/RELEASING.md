@@ -4,7 +4,9 @@ How a Smorza release is built, signed and published, and how the app finds out a
 
 ## How it fits together
 
-- `scripts/release.sh` builds the universal app, signs it ad hoc, zips it and puts it in a disk image. Smorza has
+- `scripts/release.sh` builds the universal app, signs it ad hoc, zips it and puts it in a disk image. It needs
+  Xcode, not only the Command Line Tools: Xcode's tools add the Shortcuts actions and the translations, and the
+  script stops without them. Smorza has
   no Apple Developer ID, so a downloaded copy needs **Open Anyway** once (the README explains it). What protects
   updates is Sparkle's own signature, not Apple's.
 - The zip is for Sparkle and the disk image is for people: the website's Download button picks the `.dmg` from
@@ -48,7 +50,8 @@ microphone, so it does not ask for `com.apple.security.device.audio-input` eithe
 ## Each release
 
 1. On `dev`, raise `CFBundleShortVersionString` and `CFBundleVersion` in `Resources/Info.plist`.
-   `CFBundleVersion` must go up with every release: it is the number Sparkle compares.
+   `CFBundleVersion` must go up with every release: it is the number Sparkle compares. Give the version's
+   heading in `CHANGELOG.md` the release date.
 2. Build: `scripts/release.sh` makes `build/Smorza-<version>.zip` and `build/Smorza-<version>.dmg` and prints the
    SHA-256 of both.
 3. Write the release notes as plain text (`build/notes-<version>.txt`): the update window shows them as they are.
@@ -77,6 +80,12 @@ microphone, so it does not ask for `com.apple.security.device.audio-input` eithe
 
 7. Check: `https://smorza.app/appcast.xml` lists the new version, and an older copy finds it with
    **Check for Updates…** and relaunches as the new version.
+8. Homebrew: in the tap repository (`rokoov/homebrew-smorza`, made from `packaging/homebrew-smorza`), set
+   `version` and `sha256` in `Casks/smorza.rb` to the new release and its disk image, then commit and push:
+
+   ```sh
+   shasum -a 256 build/Smorza-<version>.dmg
+   ```
 
 ## With a Developer ID
 
