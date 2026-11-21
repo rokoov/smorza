@@ -7,6 +7,28 @@
     <language>en</language>
     <!-- scripts/appcast.sh adds each release below this line, newest first -->
     <item>
+      <title>Version 0.4.0</title>
+      <pubDate>Sat, 21 Nov 2026 20:03:51 +0000</pubDate>
+      <sparkle:version>5</sparkle:version>
+      <sparkle:shortVersionString>0.4.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.4</sparkle:minimumSystemVersion>
+      <sparkle:fullReleaseNotesLink>https://github.com/rokoov/smorza/releases/tag/v0.4.0</sparkle:fullReleaseNotesLink>
+      <description sparkle:descriptionFormat="plain-text"><![CDATA[Smorza 0.4.0
+
+- A welcome window explains the one permission before macOS asks for it
+- Actions for the Shortcuts app, and smorza:// links for Terminal and Raycast
+- Shortcuts to open the mixer and to turn the playing app up, down or mute it
+- Ignore an app: Smorza leaves its sound alone and stops listing it
+- A Notifications & alerts row for the system alert volume
+- The menu bar icon shows Mute All, and the output volume if you like
+- Sliders in each app's colour, and Liquid Glass on macOS 26
+- German, French and Croatian
+- The volume keys now change the playing app instead of the app in front
+
+If you use the volume keys, macOS may ask for Accessibility again after this update.]]></description>
+      <enclosure url="https://github.com/rokoov/smorza/releases/download/v0.4.0/Smorza-0.4.0.zip" type="application/octet-stream" sparkle:edSignature="KkItRyAFPCd8bBt6rPwBzLTrZ+2LR9n1MCjzSTaJVNNxP/95ItrqihTpTstnWIuHAegII4XizUSv2x1VjGMnDQ==" length="2676073" />
+    </item>
+    <item>
       <title>Version 0.3.0</title>
       <pubDate>Fri, 20 Nov 2026 08:50:08 +0000</pubDate>
       <sparkle:version>4</sparkle:version>
