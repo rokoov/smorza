@@ -12,7 +12,11 @@ struct SmorzaApp: App {
         }
         .menuBarExtraStyle(.window)
         Settings {
-            SettingsView(model: appDelegate.model, updater: appDelegate.updater)
+            SettingsView(
+                model: appDelegate.model,
+                updater: appDelegate.updater,
+                onShowWelcome: { appDelegate.welcome.show(for: appDelegate.model) }
+            )
         }
     }
 }

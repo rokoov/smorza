@@ -37,6 +37,8 @@ final class MixerModel {
     let meters = MeterLevels()
     /// Off only for the `--snapshot` previews, which must never touch anyone's audio.
     @ObservationIgnored var routesAudio = true
+    /// While the welcome window explains the permission, routes wait, so macOS does not ask first.
+    @ObservationIgnored var defersCaptureCheck = false
 
     private let capture = CaptureCheckController()
     private let routes = RouteManager()
@@ -263,6 +265,20 @@ final class MixerModel {
         store.setOutputPriority(outputPriority)
     }
 
+    /// Starts the capture check, which makes macOS ask for the permission the first time.
+    func requestCapturePermission() {
+        defersCaptureCheck = false
+        capture.retry()
+        capture.begin(on: output.deviceID)
+    }
+
+    /// The welcome window closed: routes no longer wait for it.
+    func endCaptureDeferral() {
+        guard defersCaptureCheck else { return }
+        defersCaptureCheck = false
+        syncRoutes()
+    }
+
     func retryCaptureCheck() {
         capture.retry()
         syncRoutes()
@@ -392,7 +408,7 @@ final class MixerModel {
         for app in apps where !app.settings.isDefault {
             store.adoptVolume(for: app.key, on: app.outputDeviceUID)
         }
-        if routesAudio, apps.contains(where: \.needsRoute), capture.state != .allowed {
+        if routesAudio, !defersCaptureCheck, apps.contains(where: \.needsRoute), capture.state != .allowed {
             capture.begin(on: output.deviceID)
         }
         let canRoute = routesAudio && capture.state == .allowed

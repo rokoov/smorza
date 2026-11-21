@@ -49,9 +49,11 @@ Needs macOS 14.4 Sonoma or later.
    - macOS 15 Sequoia and later: open Smorza once and close the warning. Then go to **System Settings →
      Privacy & Security** and click **Open Anyway**.
    - macOS 14 Sonoma: right-click Smorza in Applications, choose **Open**, then **Open** again.
-3. Click the sliders icon in the menu bar. The first time you turn an app down, macOS asks to let Smorza record
-   system audio. Click **Allow**: that is how an app's sound reaches the mixer. Nothing is recorded or saved. The
-   only network traffic is the daily update check, which reads the release feed on smorza.app.
+3. A welcome window explains the one permission Smorza needs. Click **Continue**, and when macOS asks to let
+   Smorza record system audio, click **Allow**: that is how an app's sound reaches the mixer. Nothing is
+   recorded or saved. The only network traffic is the daily update check, which reads the release feed on
+   smorza.app.
+4. Click the sliders icon in the menu bar to open the mixer.
 
 From then on Smorza updates itself: it checks once a day and asks before installing.
 

@@ -6,11 +6,19 @@ import AppKit
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = MixerModel()
     let updater = Updater()
+    let welcome = WelcomeWindow()
     private var signalSources: [DispatchSourceSignal] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        let isFirstLaunch = welcome.isFirstLaunch
+        if isFirstLaunch {
+            model.defersCaptureCheck = true
+        }
         model.start()
         updater.start()
+        if isFirstLaunch {
+            welcome.show(for: model)
+        }
         quitThroughAppKit(on: [SIGTERM, SIGINT])
     }
 
