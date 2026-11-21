@@ -23,6 +23,12 @@ final class CaptureCheckController {
         static let restart: Duration = .seconds(5)
         /// How long the user has to answer the macOS prompt before the notice shows.
         static let timeout: Duration = .seconds(30)
+        /// A check that takes this long to start was waiting on the macOS prompt; without one it starts
+        /// in a fraction of a second.
+        static let promptWait: Duration = .seconds(1)
+        /// Once the user answered the prompt, the check hears the signal within this time if they
+        /// allowed it; a check passes in about 1.5 s.
+        static let answerWait: Duration = .seconds(4)
     }
 
     private(set) var state = State.unknown
@@ -82,12 +88,22 @@ final class CaptureCheckController {
     }
 
     private func run(since started: ContinuousClock.Instant) async {
-        guard await startCheck() else {
+        let didStart = await startCheck()
+        // macOS holds the first check until the user answers its prompt, so a check this slow to
+        // start comes with the answer: the signal arrives within seconds if they allowed it, and
+        // failing or staying silent is a refusal. Otherwise the user still has the full timeout.
+        let answeredPrompt = ContinuousClock.now - started >= Timing.promptWait
+        guard didStart else {
+            if answeredPrompt, !Task.isCancelled {
+                finish(allowed: false, after: ContinuousClock.now - started)
+                return
+            }
             // Nothing to listen with (a HAL error): the next sync of the routes tries again.
             task = nil
             state = .unknown
             return
         }
+        let deadline = answeredPrompt ? ContinuousClock.now + Timing.answerWait : started + Timing.timeout
         var lastStart = ContinuousClock.now
         while !Task.isCancelled {
             try? await Task.sleep(for: Timing.poll)
@@ -97,7 +113,7 @@ final class CaptureCheckController {
                 finish(allowed: true, after: now - started)
                 return
             }
-            if now - started >= Timing.timeout {
+            if now >= deadline {
                 finish(allowed: false, after: now - started)
                 return
             }

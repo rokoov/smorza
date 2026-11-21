@@ -156,7 +156,7 @@
         "hr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dopustite Smorzu u Postavkama sustava → Općenito → Stavke za prijavu."
+            "value": "Uključite Smorzu u Postavkama sustava → Općenito → Stavke za prijavu."
           }
         }
       }
@@ -772,7 +772,7 @@
         "hr": {
           "stringUnit": {
             "state": "translated",
-            "value": "U dijalogu koji prikaže macOS kliknite Dopusti."
+            "value": "U dijalogu koji prikaže macOS kliknite Dozvoli."
           }
         }
       }
@@ -3038,7 +3038,7 @@
         "hr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Čeka se dopuštenje za slušanje drugih aplikacija. Ako macOS pita, kliknite Dopusti."
+            "value": "Čeka se dozvola za slušanje drugih aplikacija. Ako macOS pita, kliknite Dozvoli."
           }
         }
       }
