@@ -13,14 +13,22 @@ struct MixerPanel: View {
     @State private var hoveredRow: String?
     @State private var scrollMonitor = RowScrollMonitor()
     @AppStorage(PanelPreferences.tintsSlidersKey) private var tintsSliders = false
-    /// Stands for the output device's row among the app rows' keys.
+    @AppStorage(PanelPreferences.showsAlertsKey) private var showsAlerts = true
+    /// Stand for the output device's row and the alerts row among the app rows' keys.
     private static let outputRowID = "output-device"
+    private static let alertsRowID = "alerts"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            OutputRow(output: model.output)
-                .padding(PanelMetrics.padding)
-                .onHover { hover(Self.outputRowID, isInside: $0) }
+            VStack(spacing: PanelMetrics.rowSpacing) {
+                OutputRow(output: model.output)
+                    .onHover { hover(Self.outputRowID, isInside: $0) }
+                if showsAlerts {
+                    AlertRow(alerts: model.alerts)
+                        .onHover { hover(Self.alertsRowID, isInside: $0) }
+                }
+            }
+            .padding(PanelMetrics.padding)
             Divider()
             if model.captureState == .blocked || (model.captureState == .checking && model.wasCaptureBlocked) {
                 CaptureNotice(isRetrying: model.captureState == .checking, onRetry: model.retryCaptureCheck)
@@ -134,7 +142,8 @@ struct MixerPanel: View {
     private func scroll(_ event: NSEvent) -> Bool {
         guard let row = hoveredRow else { return false }
         let isVertical = abs(event.scrollingDeltaY) >= abs(event.scrollingDeltaX)
-        if isVertical, row != Self.outputRowID, model.entries.count > PanelMetrics.visibleRows {
+        if isVertical, row != Self.outputRowID, row != Self.alertsRowID, model.entries.count > PanelMetrics.visibleRows
+        {
             return false
         }
         // Momentum after the fingers lift would keep turning it.
@@ -148,6 +157,8 @@ struct MixerPanel: View {
         guard change != 0 else { return true }
         if row == Self.outputRowID {
             model.output.setVolume(model.output.volume + change)
+        } else if row == Self.alertsRowID {
+            model.alerts.setVolume(model.alerts.volume + change)
         } else {
             model.nudgeVolume(of: row, byPosition: change)
         }

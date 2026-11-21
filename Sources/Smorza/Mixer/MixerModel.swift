@@ -33,6 +33,8 @@ final class MixerModel {
     /// The apps Smorza leaves alone, by key.
     private(set) var ignoredApps: [String] = []
     let output = SystemOutput()
+    /// The volume of alert and notification sounds.
+    let alerts = AlertVolume()
     /// How far the sliders go: to 100%, or to 200% where boost is on.
     let volumeScale = ProFeatures.volumeScale
     let volumeKeys = VolumeKeys()
@@ -134,6 +136,9 @@ final class MixerModel {
         // Fresh state first, while rows may still reorder; then they hold still until it closes.
         monitor.refreshPlaying()
         output.refreshLevels()
+        if UserDefaults.standard.object(forKey: PanelPreferences.showsAlertsKey) as? Bool ?? true {
+            alerts.refresh()
+        }
         isPanelVisible = true
         updateBackgroundWork()
         log.notice("Panel opened")
