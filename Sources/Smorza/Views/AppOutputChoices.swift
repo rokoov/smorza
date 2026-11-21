@@ -16,7 +16,7 @@ struct AppOutputChoices: View {
         }
         if !entry.isOutputConnected {
             Divider()
-            Text("\(entry.outputDeviceName ?? "The chosen device") is not connected")
+            Text("\(entry.outputDeviceName ?? String(localized: "The chosen device")) is not connected")
         }
     }
 

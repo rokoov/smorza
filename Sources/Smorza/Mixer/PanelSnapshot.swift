@@ -33,17 +33,32 @@ enum PanelSnapshot {
         for (name, appearanceName) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
             guard let appearance = NSAppearance(named: appearanceName) else { continue }
             write(
-                render(framed(MixerPanel(model: model, updater: updater)), appearance: appearance),
+                render(framed(MixerPanel(model: model, updater: updater, onOpenSettings: {})), appearance: appearance),
                 as: "panel-\(name)",
                 in: directory
             )
             if demo {
                 write(render(DemoContent.hud.padding(margin), appearance: appearance), as: "hud-\(name)", in: directory)
                 write(
-                    render(SettingsView(model: model, updater: updater), appearance: appearance),
+                    render(
+                        SettingsView(model: model, updater: updater, onShowWelcome: {})
+                            .fixedSize(horizontal: false, vertical: true),
+                        appearance: appearance
+                    ),
                     as: "settings-\(name)",
                     in: directory
                 )
+                for (index, step) in WelcomeStep.allCases.enumerated() {
+                    write(
+                        render(
+                            WelcomeView(model: model, onFinish: {}, shownStep: step)
+                                .background(Color(nsColor: .windowBackgroundColor)),
+                            appearance: appearance
+                        ),
+                        as: "welcome-\(index + 1)-\(name)",
+                        in: directory
+                    )
+                }
             }
         }
     }

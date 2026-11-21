@@ -1,0 +1,62 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "NSAudioCaptureUsageDescription": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Smorza spielt den Ton jeder App durch sich selbst ab, um ihre Lautstärke zu ändern. Es wird nichts aufgenommen oder gespeichert."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Smorza plays each app's sound through itself so it can change that app's volume. Nothing is recorded or saved."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Smorza fait passer le son de chaque app par lui-même pour pouvoir en changer le volume. Rien n’est enregistré ni conservé."
+          }
+        },
+        "hr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Smorza propušta zvuk svake aplikacije kroz sebe kako bi joj mogla mijenjati glasnoću. Ništa se ne snima ni ne sprema."
+          }
+        }
+      }
+    },
+    "NSMicrophoneUsageDescription": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Smorza hört nie auf dein Mikrofon. macOS fragt eventuell, wenn das Mikrofon deines Headsets Teil des Ausgabegeräts ist."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Smorza never listens to your microphone. macOS may ask when your headset's microphone is part of the output device."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Smorza n’écoute jamais votre micro. macOS peut le demander si le micro de votre casque fait partie de l’appareil de sortie."
+          }
+        },
+        "hr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Smorza nikad ne sluša vaš mikrofon. macOS može pitati kad je mikrofon vaših slušalica dio izlaznog uređaja."
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

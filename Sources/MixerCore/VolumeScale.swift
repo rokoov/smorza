@@ -16,6 +16,8 @@ public struct VolumeScale: Equatable, Sendable {
     public static let keyStep = 1.0 / 16
     /// With Shift held, a quarter of that, like the system's fine steps.
     public static let fineKeyStep = 1.0 / 64
+    /// One step of the shortcuts and links that turn an app up or down: 5% of its volume.
+    public static let shortcutStep = 0.05
 
     public var allowsBoost: Bool { maximum > 1 }
 
@@ -45,5 +47,11 @@ public struct VolumeScale: Equatable, Sendable {
         let step = fine ? Self.fineKeyStep : Self.keyStep
         let onGrid = (position(of: volume) / step).rounded() * step
         return self.volume(atPosition: onGrid + Double(direction) * step, snapsToUnity: false)
+    }
+
+    /// The volume one shortcut step up (`direction` 1) or down (-1) from `volume`, on the 5% grid.
+    public func shortcutStepped(_ volume: Double, by direction: Int) -> Double {
+        let onGrid = (clamped(volume) / Self.shortcutStep).rounded() * Self.shortcutStep
+        return clamped(onGrid + Double(direction) * Self.shortcutStep)
     }
 }

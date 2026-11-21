@@ -6,20 +6,29 @@ import SwiftUI
 struct MixerPanel: View {
     let model: MixerModel
     let updater: Updater
+    let onOpenSettings: () -> Void
     @State private var isSavingProfile = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.openSettings) private var openSettings
     /// The row under the pointer, which scrolling turns up or down.
     @State private var hoveredRow: String?
     @State private var scrollMonitor = RowScrollMonitor()
-    /// Stands for the output device's row among the app rows' keys.
+    @AppStorage(PanelPreferences.tintsSlidersKey) private var tintsSliders = false
+    @AppStorage(PanelPreferences.showsAlertsKey) private var showsAlerts = true
+    /// Stand for the output device's row and the alerts row among the app rows' keys.
     private static let outputRowID = "output-device"
+    private static let alertsRowID = "alerts"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            OutputRow(output: model.output)
-                .padding(PanelMetrics.padding)
-                .onHover { hover(Self.outputRowID, isInside: $0) }
+            VStack(spacing: PanelMetrics.rowSpacing) {
+                OutputRow(output: model.output)
+                    .onHover { hover(Self.outputRowID, isInside: $0) }
+                if showsAlerts {
+                    AlertRow(alerts: model.alerts)
+                        .onHover { hover(Self.alertsRowID, isInside: $0) }
+                }
+            }
+            .padding(PanelMetrics.padding)
             Divider()
             if model.captureState == .blocked || (model.captureState == .checking && model.wasCaptureBlocked) {
                 CaptureNotice(isRetrying: model.captureState == .checking, onRetry: model.retryCaptureCheck)
@@ -63,18 +72,14 @@ struct MixerPanel: View {
         }
         .frame(width: PanelMetrics.width)
         .animation(reduceMotion ? nil : .snappy(duration: 0.22), value: model.entries.map(\.id))
-        .background(
-            WindowVisibilityReader { isVisible in
-                if isVisible {
-                    model.panelDidAppear()
-                    scrollMonitor.start(scroll)
-                } else {
-                    scrollMonitor.stop()
-                    hoveredRow = nil
-                    model.panelDidDisappear()
-                }
+        .onChange(of: model.isPanelVisible, initial: true) { _, isVisible in
+            if isVisible {
+                scrollMonitor.start(scroll)
+            } else {
+                scrollMonitor.stop()
+                hoveredRow = nil
             }
-        )
+        }
     }
 
     @ViewBuilder
@@ -114,7 +119,9 @@ struct MixerPanel: View {
                     onSolo: { model.toggleSolo(for: entry.id) },
                     onChooseOutput: { model.setOutputDevice($0, for: entry.id) },
                     onTogglePin: { model.togglePin(for: entry.id) },
-                    onHover: { hover(entry.id, isInside: $0) }
+                    onIgnore: { model.ignore(entry.id) },
+                    onHover: { hover(entry.id, isInside: $0) },
+                    tint: tintsSliders ? model.appTints.tint(for: entry.id, icon: entry.icon) : nil
                 )
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
@@ -135,7 +142,8 @@ struct MixerPanel: View {
     private func scroll(_ event: NSEvent) -> Bool {
         guard let row = hoveredRow else { return false }
         let isVertical = abs(event.scrollingDeltaY) >= abs(event.scrollingDeltaX)
-        if isVertical, row != Self.outputRowID, model.entries.count > PanelMetrics.visibleRows {
+        if isVertical, row != Self.outputRowID, row != Self.alertsRowID, model.entries.count > PanelMetrics.visibleRows
+        {
             return false
         }
         // Momentum after the fingers lift would keep turning it.
@@ -149,6 +157,8 @@ struct MixerPanel: View {
         guard change != 0 else { return true }
         if row == Self.outputRowID {
             model.output.setVolume(model.output.volume + change)
+        } else if row == Self.alertsRowID {
+            model.alerts.setVolume(model.alerts.volume + change)
         } else {
             model.nudgeVolume(of: row, byPosition: change)
         }
@@ -184,9 +194,7 @@ struct MixerPanel: View {
             }
             Spacer()
             Button {
-                openSettings()
-                // A menu bar app is not active, so the window would open behind the others.
-                NSApp.activate()
+                onOpenSettings()
             } label: {
                 Image(systemName: "gearshape")
                     .frame(width: PanelMetrics.hitTarget, height: PanelMetrics.hitTarget)

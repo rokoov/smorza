@@ -540,5 +540,162 @@ do {
     expect(ScrollStep.keyChange(isUp: false, isFine: true) == -0.01, "with Shift it moves 1%")
 }
 
+// Icon tint: the most common saturated colour of an icon, readable in both appearances.
+do {
+    func pixels(_ colors: [(UInt8, UInt8, UInt8, UInt8)]) -> [UInt8] {
+        colors.flatMap { [$0.0, $0.1, $0.2, $0.3] }
+    }
+    func icon(_ color: (UInt8, UInt8, UInt8), count: Int) -> [(UInt8, UInt8, UInt8, UInt8)] {
+        Array(repeating: (color.0, color.1, color.2, 255), count: count)
+    }
+    let spotify = IconTint.dominant(rgba: pixels(icon((30, 215, 96), count: 80) + icon((0, 0, 0), count: 20)))
+    expect(spotify.map { $0.green > $0.red && $0.green > $0.blue } == true, "a green icon gives green")
+    let mixed = IconTint.dominant(rgba: pixels(icon((20, 90, 230), count: 60) + icon((230, 40, 40), count: 30)))
+    expect(mixed.map { $0.blue > $0.red } == true, "the colour covering more of the icon wins")
+    expect(IconTint.dominant(rgba: pixels(icon((128, 128, 128), count: 100))) == nil, "a grey icon keeps the accent")
+    expect(
+        IconTint.dominant(rgba: pixels(icon((255, 0, 0), count: 1) + icon((200, 200, 200), count: 99))) == nil,
+        "a speck of colour is not enough"
+    )
+    let transparent = Array(repeating: (UInt8(255), UInt8(0), UInt8(0), UInt8(0)), count: 100)
+    expect(IconTint.dominant(rgba: pixels(transparent)) == nil, "transparent pixels count for nothing")
+    if let yellow = IconTint.dominant(rgba: pixels(icon((255, 240, 60), count: 100))) {
+        expect(max(yellow.red, yellow.green, yellow.blue) <= 0.85 + 1e-9, "a light yellow is darkened to stay readable")
+    } else {
+        expect(false, "a yellow icon gives a colour")
+    }
+}
+
+// Links: each smorza:// action with its parameters; anything else is turned away with a reason.
+do {
+    func command(_ link: String) -> URLCommand? {
+        guard let url = URL(string: link) else { return nil }
+        return try? URLCommand.parse(url).get()
+    }
+    expect(
+        command("smorza://set-volume?app=com.spotify.client&volume=40")
+            == .setVolume(apps: ["com.spotify.client"], percent: 40),
+        "set-volume names an app and a volume"
+    )
+    expect(
+        command("smorza://set-volume?app=a&app=b&app=A&volume=0") == .setVolume(apps: ["a", "b"], percent: 0),
+        "several apps, each once"
+    )
+    expect(command("smorza://set-volume?app=a&volume=101") == nil, "a volume over 100 is turned away")
+    expect(command("smorza://set-volume?app=a&volume=nan") == nil, "so is one that is not a number")
+    expect(command("smorza://set-volume?app=a&volume=10&volume=20") == nil, "and a volume given twice")
+    expect(command("smorza://set-volume?volume=50") == nil, "an app is needed")
+    expect(command("smorza://step-volume?app=a&direction=up") == .stepVolume(apps: ["a"], direction: 1), "step up")
+    expect(command("smorza://step-volume?app=a&direction=Down") == .stepVolume(apps: ["a"], direction: -1), "step down")
+    expect(command("smorza://step-volume?app=a&direction=sideways") == nil, "an unknown direction")
+    expect(command("smorza://mute?app=a&muted=true") == .mute(apps: ["a"], change: .mute), "mute")
+    expect(command("smorza://mute?app=a&muted=false") == .mute(apps: ["a"], change: .unmute), "unmute")
+    expect(command("smorza://mute?app=a") == .mute(apps: ["a"], change: .toggle), "a bare mute toggles")
+    expect(command("smorza://mute?app=a&muted=maybe") == nil, "an unknown mute")
+    expect(
+        command("smorza://set-output?app=a&device=AirPods+Pro") == .setOutput(apps: ["a"], device: "AirPods Pro"),
+        "a plus in a device name is a space"
+    )
+    expect(
+        command("smorza://set-output?app=a&device=Desk%20%2B%20Sub") == .setOutput(apps: ["a"], device: "Desk + Sub"),
+        "and %2B a plus"
+    )
+    expect(command("smorza://set-output?app=a") == nil, "set-output needs a device")
+    expect(command("smorza://mute-all?muted=toggle") == .muteAll(.toggle), "mute-all")
+    expect(command("smorza://reset") == .reset, "reset")
+    expect(
+        command("smorza://open") == .open && command("smorza://") == .open && command("SMORZA://Open/") == .open,
+        "open, also with nothing after the scheme"
+    )
+    expect(command("smorza://explode") == nil, "an unknown action")
+    expect(command("https://open") == nil, "another scheme")
+    let rejection = URL(string: "smorza://set-volume?app=a&volume=loud").map(URLCommand.parse)
+    expect(
+        rejection.map { if case .failure(let reason) = $0 { reason.description.contains("loud") } else { false } }
+            == true,
+        "the reason names what was wrong"
+    )
+}
+
+// Mute changes, and the 5% steps of the shortcuts and links.
+do {
+    expect(MuteChange.mute.applied(to: false) && MuteChange.mute.applied(to: true), "mute mutes")
+    expect(!MuteChange.unmute.applied(to: true), "unmute unmutes")
+    expect(MuteChange.toggle.applied(to: false) && !MuteChange.toggle.applied(to: true), "toggle flips")
+    let free = VolumeScale.standard
+    expect(VolumeCurve.percent(free.shortcutStepped(0.5, by: 1)) == 55, "a step is 5%")
+    expect(VolumeCurve.percent(free.shortcutStepped(0.53, by: -1)) == 50, "steps land on the 5% grid")
+    expect(free.shortcutStepped(1, by: 1) == 1 && free.shortcutStepped(0.02, by: -1) == 0, "steps stop at the ends")
+    var volume = 1.0
+    for _ in 0..<20 {
+        volume = free.shortcutStepped(volume, by: -1)
+    }
+    expect(volume == 0, "twenty steps down reach 0%")
+}
+
+// Reset: every app back to 100% on the system output, pins kept.
+do {
+    let defaults = UserDefaults(suiteName: "reset-check")!
+    defaults.removePersistentDomain(forName: "reset-check")
+    let store = MixerSettingsStore(defaults: defaults)
+    store.setVolume(AppVolume(volume: 0.3, isMuted: true), for: "com.spotify.client", on: "speakers")
+    store.setOutputDevice(uid: "headphones", name: "Headphones", for: "com.spotify.client")
+    store.setVolume(AppVolume(volume: 0.5, isMuted: false), for: "us.zoom.xos", on: "speakers")
+    store.setPinned(true, for: "us.zoom.xos")
+    store.resetApps()
+    expect(store.appKeys == ["us.zoom.xos"], "only the pinned app is kept")
+    expect(store.settings(for: "us.zoom.xos") == AppSettings(isPinned: true), "at 100% on the system output")
+    expect(store.volume(for: "com.spotify.client", on: "speakers") == AppVolume(), "the others are forgotten")
+    expect(MixerSettingsStore(defaults: defaults).appKeys == ["us.zoom.xos"], "and it is saved")
+    defaults.removePersistentDomain(forName: "reset-check")
+}
+
+// Target app: the latest to start playing, or the app in front when nothing plays.
+do {
+    let start = Date(timeIntervalSince1970: 1_000)
+    let playing = ["com.spotify.client": start, "us.zoom.xos": start.addingTimeInterval(30)]
+    expect(TargetApp.choose(playingSince: playing, frontmost: "com.apple.Safari") == "us.zoom.xos", "the latest wins")
+    expect(TargetApp.choose(playingSince: [:], frontmost: "com.apple.Safari") == "com.apple.Safari", "else the front")
+    expect(TargetApp.choose(playingSince: [:], frontmost: nil) == nil, "or nothing")
+    let tie = ["b": start, "a": start]
+    expect(TargetApp.choose(playingSince: tie, frontmost: nil) == "a", "a tie always goes the same way")
+    expect(TargetApp.choose(playingSince: tie, frontmost: "b") == "b", "unless the app in front is in it")
+    expect(
+        TargetApp.choose(playingSince: playing, frontmost: "com.spotify.client") == "us.zoom.xos",
+        "the front app only breaks ties"
+    )
+}
+
+// Ignored apps: never routed, forgotten otherwise, and never pinned at the same time.
+do {
+    let defaults = UserDefaults(suiteName: "ignore-check")!
+    defaults.removePersistentDomain(forName: "ignore-check")
+    let store = MixerSettingsStore(defaults: defaults)
+    store.setVolume(AppVolume(volume: 0.2, isMuted: true), for: "com.apple.Music", on: "speakers")
+    store.setOutputDevice(uid: "headphones", name: "Headphones", for: "com.apple.Music")
+    store.setPinned(true, for: "com.apple.Music")
+    store.setIgnored(true, for: "com.apple.Music")
+    let ignored = store.settings(for: "com.apple.Music")
+    expect(store.ignoredApps == ["com.apple.Music"] && store.pinnedApps.isEmpty, "ignoring unpins")
+    expect(ignored == AppSettings(isIgnored: true), "and forgets the volume and device")
+    expect(!ignored.isDefault, "an ignored app is worth keeping")
+    expect(
+        !AppSettings(volumes: ["speakers": AppVolume(volume: 0.2)], isIgnored: true)
+            .needsRoute(systemOutputUID: "speakers", connectedUIDs: ["speakers"], scale: .standard),
+        "an ignored app is never routed"
+    )
+    expect(MixerSettingsStore(defaults: defaults).ignoredApps == ["com.apple.Music"], "it stays ignored")
+    store.resetApps()
+    expect(store.ignoredApps == ["com.apple.Music"], "a reset keeps it ignored")
+    store.setPinned(true, for: "com.apple.Music")
+    expect(store.ignoredApps.isEmpty && store.pinnedApps == ["com.apple.Music"], "pinning brings it back")
+    store.setIgnored(true, for: "com.apple.Music")
+    store.setIgnored(false, for: "com.apple.Music")
+    expect(store.appKeys.isEmpty, "and so does stopping to ignore it, as a new app")
+    let old = Data(#"{"volumes":{},"isPinned":true}"#.utf8)
+    expect((try? JSONDecoder().decode(AppSettings.self, from: old))?.isIgnored == false, "old saves load not ignored")
+    defaults.removePersistentDomain(forName: "ignore-check")
+}
+
 print("\(passed) passed, \(failures) failed")
 exit(failures == 0 ? 0 : 1)

@@ -28,7 +28,7 @@ struct AppOutputMenu: View {
         .fixedSize()
         .help(helpText)
         .accessibilityLabel("Output for \(entry.name)")
-        .accessibilityValue(entry.outputDeviceName ?? "System Default")
+        .accessibilityValue(entry.outputDeviceName ?? String(localized: "System Default"))
     }
 
     private var hasOwnDevice: Bool { entry.outputDeviceUID != nil }
@@ -40,8 +40,10 @@ struct AppOutputMenu: View {
     }
 
     private var helpText: String {
-        guard hasOwnDevice else { return "Plays on the system default. Click to send it elsewhere." }
-        let name = entry.outputDeviceName ?? "its own device"
-        return entry.isOutputConnected ? "Plays on \(name)" : "\(name) is not connected; plays on the system default"
+        guard hasOwnDevice else { return String(localized: "Plays on the system default. Click to send it elsewhere.") }
+        let name = entry.outputDeviceName ?? String(localized: "its own device")
+        return entry.isOutputConnected
+            ? String(localized: "Plays on \(name)")
+            : String(localized: "\(name) is not connected; plays on the system default")
     }
 }

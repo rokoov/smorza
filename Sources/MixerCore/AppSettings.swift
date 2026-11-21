@@ -11,19 +11,23 @@ public struct AppSettings: Codable, Equatable {
     public var lastVolume: AppVolume?
     /// Keeps the app's row while it is quiet or not running, so it can be set before it plays.
     public var isPinned: Bool
+    /// Left alone: never tapped, never listed, playing as macOS plays it.
+    public var isIgnored: Bool
 
     public init(
         outputDeviceUID: String? = nil,
         outputDeviceName: String? = nil,
         volumes: [String: AppVolume] = [:],
         lastVolume: AppVolume? = nil,
-        isPinned: Bool = false
+        isPinned: Bool = false,
+        isIgnored: Bool = false
     ) {
         self.outputDeviceUID = outputDeviceUID
         self.outputDeviceName = outputDeviceName
         self.volumes = volumes
         self.lastVolume = lastVolume
         self.isPinned = isPinned
+        self.isIgnored = isIgnored
     }
 
     /// Every field may be missing: saves from before a field existed still load.
@@ -34,6 +38,7 @@ public struct AppSettings: Codable, Equatable {
         volumes = try container.decodeIfPresent([String: AppVolume].self, forKey: .volumes) ?? [:]
         lastVolume = try container.decodeIfPresent(AppVolume.self, forKey: .lastVolume)
         isPinned = try container.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
+        isIgnored = try container.decodeIfPresent(Bool.self, forKey: .isIgnored) ?? false
     }
 
     public func volume(on deviceUID: String) -> AppVolume {
@@ -51,6 +56,7 @@ public struct AppSettings: Codable, Equatable {
     /// than the system output. An app at 100% on the system output plays untouched, also when the
     /// device it was sent to happens to be the system output right now.
     public func needsRoute(systemOutputUID: String, connectedUIDs: Set<String>, scale: VolumeScale) -> Bool {
+        guard !isIgnored else { return false }
         let deviceUID = outputDeviceUID(systemOutputUID: systemOutputUID, connectedUIDs: connectedUIDs)
         var setting = volume(on: deviceUID)
         setting.volume = scale.clamped(setting.volume)
@@ -59,7 +65,7 @@ public struct AppSettings: Codable, Equatable {
 
     /// Nothing differs from an app the mixer has never seen, so there is nothing to keep.
     public var isDefault: Bool {
-        !isPinned && outputDeviceUID == nil && !(lastVolume?.needsRouting ?? false)
+        !isPinned && !isIgnored && outputDeviceUID == nil && !(lastVolume?.needsRouting ?? false)
             && volumes.values.allSatisfy { !$0.needsRouting }
     }
 }

@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// Open at login, through the system's Login Items.
+/// Open at login, through the system's Login Items, and the welcome window once more.
 struct GeneralSettings: View {
+    let onShowWelcome: () -> Void
     @State private var loginItem = LoginItem()
 
     var body: some View {
@@ -16,6 +17,7 @@ struct GeneralSettings: View {
                     .font(.caption)
                     .foregroundStyle(.red)
             }
+            Button("Show Welcome Again", action: onShowWelcome)
         }
         .onAppear { loginItem.refresh() }
     }

@@ -34,6 +34,22 @@ for key in NSAudioCaptureUsageDescription LSUIElement CFBundleIdentifier SUFeedU
     /usr/libexec/PlistBuddy -c "Print :$key" "$plist" >/dev/null || { echo "Info.plist is missing $key"; exit 1; }
 done
 [[ -d build/Smorza.app/Contents/Frameworks/Sparkle.framework ]] || { echo "Sparkle.framework is missing"; exit 1; }
+# The Shortcuts actions, when Xcode's metadata processor is there to build them.
+if xcrun --find appintentsmetadataprocessor >/dev/null 2>&1; then
+    actions="build/Smorza.app/Contents/Resources/Metadata.appintents/extract.actionsdata"
+    [[ -f "$actions" ]] || { echo "Metadata.appintents is missing from the app"; exit 1; }
+    plutil -extract actions.SetAppVolumeIntent raw -o - "$actions" >/dev/null 2>&1 \
+        || plutil -extract actions json -o - "$actions" | grep -q SetAppVolumeIntent \
+        || { echo "Metadata.appintents has no Set App Volume action"; exit 1; }
+fi
+# Every string in every language, and the compiled files in the app.
+if xcrun --find xcstringstool >/dev/null 2>&1; then
+    python3 -I scripts/check-translations.py Resources/*.xcstrings
+    for language in en de fr hr; do
+        [[ -d "build/Smorza.app/Contents/Resources/$language.lproj" ]] || { echo "$language.lproj is missing"; exit 1; }
+    done
+    [[ -f build/Smorza.app/Contents/Resources/de.lproj/Localizable.strings ]] || { echo "No German strings"; exit 1; }
+fi
 shopt -s nullglob
 for resources in "$(swift build -c release --show-bin-path)"/*.bundle; do
     name=$(basename "$resources")

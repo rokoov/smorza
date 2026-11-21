@@ -6,17 +6,20 @@ struct SettingsView: View {
 
     let model: MixerModel
     let updater: Updater
+    let onShowWelcome: () -> Void
 
     var body: some View {
         Form {
-            GeneralSettings()
+            GeneralSettings(onShowWelcome: onShowWelcome)
             ShortcutSettings()
             VolumeKeysSettings(volumeKeys: model.volumeKeys)
             OutputSettings(model: model)
+            IgnoredAppsSettings(model: model)
+            AppearanceSettings()
             UpdateSettings(updater: updater, onCopyDiagnostics: model.copyDiagnostics)
+            ProTeaserSettings()
         }
         .formStyle(.grouped)
         .frame(width: Self.width)
-        .fixedSize(horizontal: false, vertical: true)
     }
 }

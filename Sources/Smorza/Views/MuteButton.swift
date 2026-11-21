@@ -25,8 +25,12 @@ struct MuteButton: View {
     }
 
     private var helpText: String {
-        let mute = isMuted ? "Unmute" : "Mute"
-        return onSolo == nil ? mute : "\(mute) · Option-click to play solo"
+        switch (isMuted, onSolo == nil) {
+        case (true, true): String(localized: "Unmute")
+        case (false, true): String(localized: "Mute")
+        case (true, false): String(localized: "Unmute · Option-click to play solo")
+        case (false, false): String(localized: "Mute · Option-click to play solo")
+        }
     }
 
     private var symbol: String {

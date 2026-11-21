@@ -26,6 +26,8 @@ struct MixerRow<Icon: View, Accessory: View, Meter: View>: View {
     /// Drawn along the bottom of the slider: a routed app's live level, nothing otherwise.
     let meter: Meter
     @ViewBuilder let icon: () -> Icon
+    /// Space between the slider's knob and the level under it, in points.
+    private static var meterGap: CGFloat { 2 }
 
     var body: some View {
         HStack(spacing: 10) {
@@ -55,7 +57,11 @@ struct MixerRow<Icon: View, Accessory: View, Meter: View>: View {
                             UnityMark(position: unityMark)
                         }
                     }
-                    .overlay(alignment: .bottom) { meter }
+                    // Hangs just below the slider: the knob fills the slider's height, so a level drawn
+                    // inside it runs through the knob.
+                    .overlay(alignment: .bottom) {
+                        meter.alignmentGuide(.bottom) { $0[.top] - Self.meterGap }
+                    }
                     .disabled(!isEnabled)
                     .opacity(isMuted ? 0.45 : 1)
                     .onKeyPress(keys: [.leftArrow, .rightArrow, .upArrow, .downArrow], phases: [.down, .repeat]) {
