@@ -1,5 +1,6 @@
 import AppIntents
 import AppKit
+import KeyboardShortcuts
 
 /// Owns the model, the updater, the panel and the windows, so routing starts at launch rather than
 /// when the panel first opens, and takes the routes down on the way out.
@@ -50,6 +51,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         self.panel = panel
+        KeyboardShortcuts.onKeyDown(for: .togglePanel) { [weak self] in
+            self?.panel?.toggle()
+        }
         let links = LinkHandler(model: model, openPanel: { [weak self] in self?.panel?.show() })
         self.links = links
         waitingLinks.forEach(links.open)

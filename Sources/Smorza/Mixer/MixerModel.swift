@@ -53,6 +53,11 @@ final class MixerModel {
     @ObservationIgnored private var listedKeys: Set<String> = []
     /// When each app was last seen playing, for the order of the quiet rows.
     @ObservationIgnored private var lastPlayed: [String: Date] = [:]
+    /// When each playing app started, for the target app.
+    @ObservationIgnored private var playingSince: [String: Date] = [:]
+    @ObservationIgnored private let heldKey = HeldKey()
+    /// Whether the volume key now held went to an app, so its release goes there too.
+    @ObservationIgnored private var tookVolumeKey = false
     /// False until the first output device is read, so starting up shows no overlay.
     @ObservationIgnored private var hasLoadedOutput = false
     @ObservationIgnored private var rowSummary: [String] = []
@@ -89,6 +94,20 @@ final class MixerModel {
         volumeKeys.start()
         KeyboardShortcuts.onKeyUp(for: .muteAll) { [weak self] in
             self?.toggleMuteAll()
+        }
+        KeyboardShortcuts.onKeyDown(for: .targetVolumeUp) { [weak self] in
+            self?.holdTargetStep(1)
+        }
+        KeyboardShortcuts.onKeyDown(for: .targetVolumeDown) { [weak self] in
+            self?.holdTargetStep(-1)
+        }
+        for name in [KeyboardShortcuts.Name.targetVolumeUp, .targetVolumeDown] {
+            KeyboardShortcuts.onKeyUp(for: name) { [weak self] in
+                self?.heldKey.release()
+            }
+        }
+        KeyboardShortcuts.onKeyDown(for: .targetMute) { [weak self] in
+            self?.toggleTargetMute()
         }
         wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification,
@@ -159,6 +178,18 @@ final class MixerModel {
                 setting.isMuted = false
             }
         }
+    }
+
+    /// The app the shortcuts for one app and the volume keys change: the one that started playing
+    /// most recently, or the app in front when nothing plays. Nil when that is Smorza itself.
+    func targetApp() -> String? {
+        // macOS does not announce every start, and here the order matters.
+        monitor.refreshPlaying()
+        let frontmost = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        return TargetApp.choose(
+            playingSince: playingSince,
+            frontmost: frontmost == Bundle.main.bundleIdentifier ? nil : frontmost
+        )
     }
 
     /// Every app back to 100%, unmuted, on the system output, for the reset link. Pins stay.
@@ -389,15 +420,17 @@ final class MixerModel {
         syncRoutes()
     }
 
-    /// A volume key changes the app in front, not the whole Mac, and shows the overlay. With no app
-    /// in front that the mixer could change (this app, or one with no bundle), the system keeps it.
+    /// A volume key changes the target app, not the whole Mac, and shows the overlay. With no app
+    /// the mixer could change (nothing playing, and this app or one with no bundle in front), the
+    /// system keeps it.
     private func handleVolumeKey(_ key: VolumeKeyTap.Key, isPressed: Bool, isFine: Bool) -> Bool {
-        guard let app = NSWorkspace.shared.frontmostApplication,
-            let appKey = app.bundleIdentifier,
-            appKey != Bundle.main.bundleIdentifier
-        else { return false }
         // The release only has to be kept from the system, like its press.
-        guard isPressed else { return true }
+        guard isPressed else { return tookVolumeKey }
+        guard let appKey = targetApp() else {
+            tookVolumeKey = false
+            return false
+        }
+        tookVolumeKey = true
         adjust(appKey) { setting in
             switch key {
             case .up:
@@ -412,6 +445,25 @@ final class MixerModel {
         }
         showVolumeOverlay(for: appKey)
         return true
+    }
+
+    /// A shortcut turns the target app up or down a step, and on while its keys are held. The app is
+    /// picked once per press, so a held key keeps to it.
+    private func holdTargetStep(_ direction: Int) {
+        guard let key = targetApp() else { return }
+        heldKey.press { [weak self] in
+            guard let self else { return false }
+            let before = store.volume(for: key, on: outputDeviceUID(for: key))
+            stepVolume(of: key, by: direction)
+            showVolumeOverlay(for: key)
+            return store.volume(for: key, on: outputDeviceUID(for: key)).volume != before.volume
+        }
+    }
+
+    private func toggleTargetMute() {
+        guard let key = targetApp() else { return }
+        changeMute(.toggle, for: key)
+        showVolumeOverlay(for: key)
     }
 
     /// Every app in the mixer with the volume and mute it has now.
@@ -559,6 +611,11 @@ final class MixerModel {
         let now = Date()
         for app in apps where app.isPlaying {
             lastPlayed[app.key] = now
+        }
+        let playing = Set(apps.filter(\.isPlaying).map(\.key)).subtracting([Bundle.main.bundleIdentifier ?? ""])
+        playingSince = playingSince.filter { playing.contains($0.key) }
+        for key in playing where playingSince[key] == nil {
+            playingSince[key] = now
         }
         listedKeys.formIntersection(apps.map(\.key))
         let pinned = Set(store.pinnedApps)

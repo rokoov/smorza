@@ -650,5 +650,21 @@ do {
     defaults.removePersistentDomain(forName: "reset-check")
 }
 
+// Target app: the latest to start playing, or the app in front when nothing plays.
+do {
+    let start = Date(timeIntervalSince1970: 1_000)
+    let playing = ["com.spotify.client": start, "us.zoom.xos": start.addingTimeInterval(30)]
+    expect(TargetApp.choose(playingSince: playing, frontmost: "com.apple.Safari") == "us.zoom.xos", "the latest wins")
+    expect(TargetApp.choose(playingSince: [:], frontmost: "com.apple.Safari") == "com.apple.Safari", "else the front")
+    expect(TargetApp.choose(playingSince: [:], frontmost: nil) == nil, "or nothing")
+    let tie = ["b": start, "a": start]
+    expect(TargetApp.choose(playingSince: tie, frontmost: nil) == "a", "a tie always goes the same way")
+    expect(TargetApp.choose(playingSince: tie, frontmost: "b") == "b", "unless the app in front is in it")
+    expect(
+        TargetApp.choose(playingSince: playing, frontmost: "com.spotify.client") == "us.zoom.xos",
+        "the front app only breaks ties"
+    )
+}
+
 print("\(passed) passed, \(failures) failed")
 exit(failures == 0 ? 0 : 1)
