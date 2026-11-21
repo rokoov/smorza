@@ -15,6 +15,7 @@ struct SettingsView: View {
             VolumeKeysSettings(volumeKeys: model.volumeKeys)
             OutputSettings(model: model)
             UpdateSettings(updater: updater, onCopyDiagnostics: model.copyDiagnostics)
+            ProTeaserSettings()
         }
         .formStyle(.grouped)
         .frame(width: Self.width)
