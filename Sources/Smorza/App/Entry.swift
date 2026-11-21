@@ -16,7 +16,15 @@ enum Entry {
                 return
             }
         }
+        // Decided before Volume Mixer's settings come in, which would make this launch look like an
+        // update and start the permission check before the welcome window explains it.
+        let isFirstLaunch = WelcomeWindow.isFirstLaunch()
         FormerName.adoptSettings()
-        SmorzaApp.main()
+        let app = NSApplication.shared
+        let delegate = AppDelegate(isFirstLaunch: isFirstLaunch)
+        app.delegate = delegate
+        withExtendedLifetime(delegate) {
+            app.run()
+        }
     }
 }

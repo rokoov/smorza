@@ -13,8 +13,11 @@ struct AppRow: View {
     let onSolo: () -> Void
     let onChooseOutput: (OutputDevice?) -> Void
     let onTogglePin: () -> Void
+    let onIgnore: () -> Void
     /// Tells the panel which row the pointer is over, for scrolling.
     let onHover: (Bool) -> Void
+    /// The app's own colour for its slider, level and output icon, or nil for the system accent.
+    var tint: Color?
     @State private var isHovered = false
 
     var body: some View {
@@ -25,7 +28,7 @@ struct AppRow: View {
             volume: entry.volume,
             unityMark: scale.allowsBoost ? scale.unityPosition : nil,
             levelStyle: levelStyle,
-            titleSymbol: entry.isPinned ? (name: "pin.fill", label: "Pinned") : nil,
+            titleSymbol: entry.isPinned ? (name: "pin.fill", label: String(localized: "Pinned")) : nil,
             isMuted: entry.isMuted,
             isEnabled: true,
             onChange: setPosition,
@@ -53,6 +56,7 @@ struct AppRow: View {
                 }
                 .help(activity)
         }
+        .tint(tint)
         .onHover { isInside in
             isHovered = isInside
             onHover(isInside)
@@ -70,18 +74,21 @@ struct AppRow: View {
                     onChoose: onChooseOutput
                 )
             }
+            Divider()
+            Button("Ignore \(entry.name)", action: onIgnore)
+                .help("Smorza leaves this app's sound alone and stops listing it. Settings lists ignored apps.")
         }
     }
 
     private var activity: String {
-        if !entry.isRunning { return "Not running" }
-        return entry.isPlaying ? "Playing" : "Quiet right now"
+        if !entry.isRunning { return String(localized: "Not running") }
+        return entry.isPlaying ? String(localized: "Playing") : String(localized: "Quiet right now")
     }
 
     private var level: String {
-        if entry.isMuted { return "Muted" }
-        let percent = "\(VolumeCurve.percent(entry.volume))%"
-        return entry.isSolo ? "Solo · \(percent)" : percent
+        if entry.isMuted { return String(localized: "Muted") }
+        let percent = VolumeCurve.percent(entry.volume)
+        return entry.isSolo ? String(localized: "Solo · \(percent)%") : "\(percent)%"
     }
 
     private var levelStyle: AnyShapeStyle {

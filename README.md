@@ -19,19 +19,30 @@ process taps that macOS 14.4 and later provide. Smorza was called Volume Mixer u
 - Scroll over a row to change its volume; a focused slider moves 5% with the arrow keys, 1% with Shift. Every
   slider and button has a VoiceOver label
 - Option-click an app's speaker to play it solo; Option-click again to bring the others back
+- Ignore an app (right-click its row) and Smorza leaves its sound alone and stops listing it. Settings lists
+  ignored apps, with a way back
+- A Notifications & alerts row for the system's alert volume, the one in System Settings > Sound
 - An output priority list in Settings: the first connected device in your order becomes the output, each
   device keeps its own volume, and a small overlay says where sound went ("AirPods Pro, 40%")
-- Mute All, from the panel or with Control-Option-M anywhere (change it in Settings); pressing it again gives
-  every app its own mute back
-- The volume keys can change the app in front instead of the whole Mac, with a small overlay showing its level;
+- Mute All, from the panel or with Control-Option-M anywhere; pressing it again gives every app its own mute
+  back. While it is on, the menu bar icon is crossed out
+- Shortcuts you record in Settings: open or close the mixer, also over a full-screen app, and turn the playing
+  app up or down 5% or mute it. The playing app is the one that started playing last, or the app in front when
+  nothing plays
+- The volume keys can change the playing app instead of the whole Mac, with a small overlay showing its level;
   Option + the keys still change the Mac's volume (needs the Accessibility permission, asked for when you turn
   it on in Settings)
+- Actions for the Shortcuts app and `smorza://` links for Terminal and Raycast (see
+  [Shortcuts and links](#shortcuts-and-links))
 - Browsers and Electron apps play sound from helper processes; those fold into their app (Chrome, Safari, Discord)
 - Apps at 100% on the default output are never touched. Only apps you turn down, mute or send to another device
   go through the mixer
+- A welcome window explains the one permission Smorza needs before macOS asks for it
 - Updates itself: checks once a day and asks before installing
-- A small settings window, behind the gear in the panel: open at login, shortcuts, the volume keys, the output
-  order, updates
+- Settings, behind the gear in the panel: open at login, shortcuts, the volume keys, the output order, ignored
+  apps, sliders in each app's colour, the output volume in the menu bar, updates
+- Liquid Glass on macOS 26 and later
+- In English, German, French and Croatian
 - Universal app for Apple silicon and Intel Macs
 
 <picture>
@@ -49,11 +60,15 @@ Needs macOS 14.4 Sonoma or later.
    - macOS 15 Sequoia and later: open Smorza once and close the warning. Then go to **System Settings →
      Privacy & Security** and click **Open Anyway**.
    - macOS 14 Sonoma: right-click Smorza in Applications, choose **Open**, then **Open** again.
-3. Click the sliders icon in the menu bar. The first time you turn an app down, macOS asks to let Smorza record
-   system audio. Click **Allow**: that is how an app's sound reaches the mixer. Nothing is recorded or saved. The
-   only network traffic is the daily update check, which reads the release feed on smorza.app.
+3. A welcome window explains the one permission Smorza needs. Click **Continue**, and when macOS asks to let
+   Smorza record system audio, click **Allow**: that is how an app's sound reaches the mixer. Nothing is
+   recorded or saved. The only network traffic is the daily update check, which reads the release feed on
+   smorza.app.
+4. Click the sliders icon in the menu bar to open the mixer.
 
 From then on Smorza updates itself: it checks once a day and asks before installing.
+
+With [Homebrew](https://brew.sh): `brew install --cask rokoov/smorza/smorza`
 
 Coming from Volume Mixer: open Smorza once and it takes over your volumes and devices. Then quit Volume Mixer and
 move it to the Trash. macOS asks for the audio permission again, because the app has a new name.
@@ -62,10 +77,38 @@ If you clicked Don't Allow, turn Smorza on under **System Settings → Privacy &
 Audio Recording → System Audio Recording Only** and press **Try Again** in the panel. Until then every app plays
 at full volume.
 
+## Shortcuts and links
+
+Smorza adds five actions to the Shortcuts app: **Set App Volume**, **Mute App**, **Set App Output Device**, **Mute
+All Apps** and **Unmute All Apps**. Spotlight and Siri offer them too ("Mute all apps with Smorza").
+
+The same actions work as `smorza://` links, for Terminal, Raycast, Alfred or the **Open URLs** action in Shortcuts.
+An app is named by its bundle identifier (`osascript -e 'id of app "Spotify"'` prints it), or by the name the
+panel shows. Repeat `app=` to change several apps at once.
+
+| Link | What it does |
+| --- | --- |
+| `smorza://set-volume?app=com.spotify.client&volume=40` | Sets the volume, 0 to 100 |
+| `smorza://step-volume?app=com.spotify.client&direction=up` | Turns the app up or down 5%; up also unmutes it |
+| `smorza://mute?app=com.spotify.client&muted=true` | `true` mutes, `false` unmutes, `toggle` (or nothing) toggles |
+| `smorza://set-output?app=com.spotify.client&device=AirPods%20Pro` | Sends the app to a device, by name or UID; `device=default` sends it back to the system output |
+| `smorza://mute-all?muted=toggle` | Mute All on, off or toggled, as with `mute` |
+| `smorza://reset` | Every app back to 100%, unmuted, on the system output; pins stay |
+| `smorza://open` | Opens the panel |
+
+Spaces in a device name are `%20` or `+`. A link that names an unknown action, app or device does nothing, and the
+log says why (see [Debugging](#debugging)).
+
+- **Terminal**: `open "smorza://set-volume?app=com.spotify.client&app=com.hnc.Discord&volume=30"`
+- **Raycast**: create a Quicklink with the link as its address and give it a hotkey. `{argument}` in the link asks
+  for a value each time: `smorza://set-volume?app=com.spotify.client&volume={argument}`
+- **Shortcuts**: add **Open URLs** with the link, or use the Smorza actions directly
+
 ## Build from source
 
-Needs macOS 14.4 or later and Swift 5.9 or later. The Command Line Tools are enough (`xcode-select --install`).
-The first build fetches [Sparkle](https://sparkle-project.org) and
+Needs macOS 14.4 or later and Swift 5.9 or later. The Command Line Tools build the app
+(`xcode-select --install`); with Xcode installed it also gets its Shortcuts actions and its translations,
+which Xcode's tools compile. The first build fetches [Sparkle](https://sparkle-project.org) and
 [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts) through SwiftPM.
 
 ```sh
@@ -76,7 +119,12 @@ scripts/format.sh           # formats the code with swift-format
 scripts/check.sh            # formatting, build without warnings, core checks, bundle checks
 scripts/release.sh          # universal app as a zip (for updates) and a .dmg, for a release
 scripts/appcast.sh <zip>    # signs a release zip and adds it to the update feed
+scripts/strings.sh          # adds new strings from the code to Resources/Localizable.xcstrings
 ```
+
+Every string the app shows lives in `Resources/Localizable.xcstrings`; the permission prompts are in
+`Resources/InfoPlist.xcstrings`. After changing a string in the code, run `scripts/strings.sh` and translate what
+it added: `scripts/check.sh` lists any string a language lacks.
 
 The code follows the formatting of Apple's SwiftNIO (`.swift-format`): `scripts/format.sh` applies it and
 `scripts/check.sh` fails on anything it would change. Building, signing and publishing a release is described in
@@ -102,7 +150,11 @@ disappears, helpers show under their own names.
 | `Sources/Smorza/CoreAudio` | Audio clients, process taps, the capture check, output devices |
 | `Sources/Smorza/Mixer` | `MixerModel`, `RouteManager` and `CaptureCheckController`: what is routed, when and where |
 | `Sources/Smorza/Views` | The menu bar panel, one view per file |
-| `Sources/Smorza/App` | Entry point, app delegate, login item, updates, logging |
+| `Sources/Smorza/Settings` | The settings window |
+| `Sources/Smorza/Welcome` | The welcome window and its steps |
+| `Sources/Smorza/Intents` | The Shortcuts actions |
+| `Sources/Smorza/App` | Entry point, menu bar icon and panel, shortcuts, links, login item, updates, logging |
+| `Resources/*.xcstrings` | Every string and its German, French and Croatian translation |
 | `Checks/MixerCoreChecks` | Checks for `MixerCore`, run by `scripts/check.sh` |
 
 ## Performance
@@ -126,7 +178,7 @@ and 0.3% in the mixer. The level meters only run while the panel is open.
 
 ## Roadmap
 
-The mixer stays free. Next for everyone: a shortcut that opens the panel, and scrolling on the menu bar icon.
+The mixer stays free. Next for everyone: scrolling on the menu bar icon, and more languages.
 
 Pro, coming soon, a one-time unlock for automation:
 
@@ -136,7 +188,6 @@ Pro, coming soon, a one-time unlock for automation:
 - Boost quiet apps up to 200%, with a limiter so nothing clips
 - Night mode: a gentle compressor on every app for late-night listening
 - A command palette: type "spotify 30" or "discord to airpods"
-- Shortcuts actions and a URL scheme for scripts
 
 Maybe later, if people ask for them: an equalizer per app, trackpad edge gestures, MIDI controllers.
 

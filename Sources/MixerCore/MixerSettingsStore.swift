@@ -93,7 +93,25 @@ public final class MixerSettingsStore {
     }
 
     public func setPinned(_ isPinned: Bool, for app: String) {
-        update(app) { $0.isPinned = isPinned }
+        update(app) { settings in
+            settings.isPinned = isPinned
+            // An app is either kept in sight or left alone, never both.
+            if isPinned {
+                settings.isIgnored = false
+            }
+        }
+    }
+
+    /// The apps Smorza leaves alone.
+    public var ignoredApps: [String] {
+        apps.filter { $0.value.isIgnored }.keys.sorted()
+    }
+
+    /// Ignoring an app forgets its volumes, device and pin, so it plays as macOS plays it, and
+    /// it comes back from being ignored as an app Smorza has never seen.
+    public func setIgnored(_ isIgnored: Bool, for app: String) {
+        apps[app] = isIgnored ? AppSettings(isIgnored: true) : nil
+        save()
     }
 
     public func setOutputDevice(uid: String?, name: String?, for app: String) {
@@ -101,6 +119,15 @@ public final class MixerSettingsStore {
             settings.outputDeviceUID = uid
             settings.outputDeviceName = uid == nil ? nil : name
         }
+    }
+
+    /// Every app back to 100%, unmuted, on the system output. Pins and ignored apps stay.
+    public func resetApps() {
+        apps = apps.compactMapValues { settings in
+            let kept = AppSettings(isPinned: settings.isPinned, isIgnored: settings.isIgnored)
+            return kept.isDefault ? nil : kept
+        }
+        save()
     }
 
     public func setOutputPriority(_ priority: OutputPriority) {

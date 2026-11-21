@@ -30,13 +30,21 @@ final class MixerModel {
     private(set) var muteAll: MuteAllSession?
     /// The user's order of output devices, for automatic switching.
     private(set) var outputPriority = OutputPriority()
+    /// The apps Smorza leaves alone, by key.
+    private(set) var ignoredApps: [String] = []
     let output = SystemOutput()
+    /// The volume of alert and notification sounds.
+    let alerts = AlertVolume()
     /// How far the sliders go: to 100%, or to 200% where boost is on.
     let volumeScale = ProFeatures.volumeScale
     let volumeKeys = VolumeKeys()
     let meters = MeterLevels()
+    /// Each app's colour, for sliders tinted with it.
+    @ObservationIgnored let appTints = AppTints()
     /// Off only for the `--snapshot` previews, which must never touch anyone's audio.
     @ObservationIgnored var routesAudio = true
+    /// While the welcome window explains the permission, routes wait, so macOS does not ask first.
+    @ObservationIgnored var defersCaptureCheck = false
 
     private let capture = CaptureCheckController()
     private let routes = RouteManager()
@@ -49,11 +57,18 @@ final class MixerModel {
     @ObservationIgnored private var listedKeys: Set<String> = []
     /// When each app was last seen playing, for the order of the quiet rows.
     @ObservationIgnored private var lastPlayed: [String: Date] = [:]
+    /// When each playing app started, for the target app.
+    @ObservationIgnored private var playingSince: [String: Date] = [:]
+    @ObservationIgnored private let heldKey = HeldKey()
+    /// Whether the volume key now held went to an app, so its release goes there too.
+    @ObservationIgnored private var tookVolumeKey = false
     /// False until the first output device is read, so starting up shows no overlay.
     @ObservationIgnored private var hasLoadedOutput = false
     @ObservationIgnored private var rowSummary: [String] = []
-    @ObservationIgnored private var isPanelVisible = false
+    private(set) var isPanelVisible = false
     @ObservationIgnored private var isDemo = false
+    /// Set once the app quits: from then on nothing touches audio.
+    @ObservationIgnored private var hasShutDown = false
     @ObservationIgnored private var heartbeat: Task<Void, Never>?
     @ObservationIgnored private var meterLoop: Task<Void, Never>?
     @ObservationIgnored private var napBlocker: NSObjectProtocol?
@@ -70,6 +85,7 @@ final class MixerModel {
         output.onDevicesChange = { [weak self] in self?.outputDevicesChanged() }
         output.onLevelsChange = { [weak self] in self?.outputLevelsChanged() }
         outputPriority = store.outputPriority
+        ignoredApps = store.ignoredApps
         capture.onFinish = { [weak self] in self?.syncRoutes() }
         routes.onRetry = { [weak self] in self?.syncRoutes() }
         routes.onRoutesChanged = { [weak self] in self?.updateBackgroundWork() }
@@ -85,6 +101,20 @@ final class MixerModel {
         volumeKeys.start()
         KeyboardShortcuts.onKeyUp(for: .muteAll) { [weak self] in
             self?.toggleMuteAll()
+        }
+        KeyboardShortcuts.onKeyDown(for: .targetVolumeUp) { [weak self] in
+            self?.holdTargetStep(1)
+        }
+        KeyboardShortcuts.onKeyDown(for: .targetVolumeDown) { [weak self] in
+            self?.holdTargetStep(-1)
+        }
+        for name in [KeyboardShortcuts.Name.targetVolumeUp, .targetVolumeDown] {
+            KeyboardShortcuts.onKeyUp(for: name) { [weak self] in
+                self?.heldKey.release()
+            }
+        }
+        KeyboardShortcuts.onKeyDown(for: .targetMute) { [weak self] in
+            self?.toggleTargetMute()
         }
         wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification,
@@ -108,6 +138,9 @@ final class MixerModel {
         // Fresh state first, while rows may still reorder; then they hold still until it closes.
         monitor.refreshPlaying()
         output.refreshLevels()
+        if UserDefaults.standard.object(forKey: PanelPreferences.showsAlertsKey) as? Bool ?? true {
+            alerts.refresh()
+        }
         isPanelVisible = true
         updateBackgroundWork()
         log.notice("Panel opened")
@@ -135,6 +168,127 @@ final class MixerModel {
         setVolume(volumeScale.volume(atPosition: position), for: key)
     }
 
+    /// Mutes, unmutes or toggles an app, for the Shortcuts actions and links.
+    func changeMute(_ change: MuteChange, for key: String) {
+        adjust(key) { $0.isMuted = change.applied(to: $0.isMuted) }
+    }
+
+    /// Mute All on, off or toggled, for the Shortcuts actions and links.
+    func changeMuteAll(_ change: MuteChange) {
+        guard change.applied(to: muteAll != nil) != (muteAll != nil) else { return }
+        toggleMuteAll()
+    }
+
+    /// Turns an app up or down one 5% step, for the shortcuts and links. Turning it up unmutes it,
+    /// like the volume keys.
+    func stepVolume(of key: String, by direction: Int) {
+        adjust(key) { setting in
+            setting.volume = volumeScale.shortcutStepped(setting.volume, by: direction)
+            if direction > 0 {
+                setting.isMuted = false
+            }
+        }
+    }
+
+    /// The app the shortcuts for one app and the volume keys change: the one that started playing
+    /// most recently, or the app in front when nothing plays. Nil when that is Smorza itself.
+    func targetApp() -> String? {
+        // macOS does not announce every start, and here the order matters.
+        monitor.refreshPlaying()
+        let frontmost = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+            .flatMap { $0 == Bundle.main.bundleIdentifier || ignoredApps.contains($0) ? nil : $0 }
+        return TargetApp.choose(playingSince: playingSince, frontmost: frontmost)
+    }
+
+    /// Every app back to 100%, unmuted, on the system output, for the reset link. Pins stay.
+    func resetAll() {
+        endSolo(restoring: false)
+        muteAll = nil
+        for key in store.appKeys {
+            routes.clearFailures(for: key)
+        }
+        store.resetApps()
+        log.notice("Reset every app")
+        syncRoutes()
+    }
+
+    /// The app a link names, by bundle identifier or by name, among the apps in the mixer, the
+    /// running apps and then the installed ones.
+    func appKey(matching name: String) -> String? {
+        let known = entries.map { ($0.id, $0.name) } + shortcutApps().map { ($0.key, $0.name) }
+        if let match = known.first(where: { $0.0.caseInsensitiveCompare(name) == .orderedSame }) {
+            return match.0
+        }
+        if let match = known.first(where: { $0.1.localizedCaseInsensitiveCompare(name) == .orderedSame }) {
+            return match.0
+        }
+        return resolver.identity(forBundleIdentifier: name)?.key
+    }
+
+    /// Shows an app's volume in the overlay, for a change made with the panel closed.
+    func showVolumeOverlay(for key: String) {
+        let identity =
+            entries.first { $0.id == key }.map { (name: $0.name, icon: $0.icon) }
+            ?? shortcutApp(id: key).map { (name: $0.name, icon: $0.icon) }
+        guard let identity else { return }
+        let setting = store.volume(for: key, on: outputDeviceUID(for: key))
+        hud.show(
+            VolumeHUDView(
+                name: identity.name,
+                icon: identity.icon,
+                volume: volumeScale.clamped(setting.volume),
+                isMuted: setting.isMuted,
+                scale: volumeScale
+            )
+        )
+    }
+
+    /// Releases an app: no tap, its sound as macOS plays it, and no row. Its volumes, device and
+    /// pin are forgotten.
+    func ignore(_ key: String) {
+        let name = entries.first { $0.id == key }?.name ?? key
+        if solo?.key == key {
+            endSolo(restoring: true)
+        }
+        store.setIgnored(true, for: key)
+        ignoredApps = store.ignoredApps
+        routes.clearFailures(for: key)
+        listedKeys.remove(key)
+        log.notice("Ignoring \(name, privacy: .public)")
+        syncRoutes()
+    }
+
+    func stopIgnoring(_ key: String) {
+        store.setIgnored(false, for: key)
+        ignoredApps = store.ignoredApps
+        let name = resolver.identity(forKey: key).name
+        log.notice("No longer ignoring \(name, privacy: .public)")
+        syncRoutes()
+    }
+
+    /// An ignored app's name and icon, also while it is not running.
+    func ignoredIdentity(_ key: String) -> AppIdentity {
+        resolver.identity(forKey: key)
+    }
+
+    /// Running apps with a bundle, for the app picker of the Shortcuts actions.
+    func shortcutApps() -> [AppIdentity] {
+        let ignored = Set(ignoredApps)
+        return NSWorkspace.shared.runningApplications
+            .filter { $0.activationPolicy == .regular && $0.bundleIdentifier != Bundle.main.bundleIdentifier }
+            .filter { !ignored.contains($0.bundleIdentifier ?? "") }
+            .compactMap { app in
+                guard let key = app.bundleIdentifier else { return nil }
+                return AppIdentity(key: key, name: app.localizedName ?? key, icon: app.icon ?? NSImage())
+            }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    /// An app a shortcut names, running or only installed.
+    func shortcutApp(id: String) -> AppIdentity? {
+        shortcutApps().first { $0.key == id } ?? resolver.identity(forBundleIdentifier: id)
+    }
+
     /// Keeps an app's row while it is quiet or not running, or lets it go again.
     func togglePin(for key: String) {
         let isPinned = !store.settings(for: key).isPinned
@@ -145,12 +299,7 @@ final class MixerModel {
     }
 
     func toggleMute(for key: String) {
-        // Muting by hand takes over from a solo or Mute All, whose saved mutes no longer apply.
-        endSolo(restoring: false)
-        muteAll = nil
-        var setting = store.volume(for: key, on: outputDeviceUID(for: key))
-        setting.isMuted.toggle()
-        apply(setting, to: key)
+        changeMute(.toggle, for: key)
     }
 
     /// Mutes every other app in the mixer and unmutes this one. Soloing it again, or quitting it,
@@ -188,12 +337,12 @@ final class MixerModel {
         }
         hud.show(
             VolumeHUDView(
-                name: "All apps",
+                name: String(localized: "All apps"),
                 icon: NSApp.applicationIconImage ?? NSImage(),
                 volume: 0,
                 isMuted: muteAll != nil,
                 scale: volumeScale,
-                status: muteAll != nil ? "Muted" : "Back as they were",
+                status: muteAll != nil ? String(localized: "Muted") : String(localized: "Back as they were"),
                 showsLevel: false
             )
         )
@@ -236,6 +385,7 @@ final class MixerModel {
 
     /// Sends the app to `device`, or back to the system output with nil.
     func setOutputDevice(_ device: OutputDevice?, for key: String) {
+        guard !isIgnored(key) else { return }
         store.setOutputDevice(uid: device?.uid, name: device?.name, for: key)
         routes.clearFailures(for: key)
         syncRoutes()
@@ -263,12 +413,43 @@ final class MixerModel {
         store.setOutputPriority(outputPriority)
     }
 
+    /// Starts the capture check, which makes macOS ask for the permission the first time.
+    func requestCapturePermission() {
+        guard !hasShutDown else { return }
+        defersCaptureCheck = false
+        capture.retry()
+        capture.begin(on: output.deviceID)
+    }
+
+    /// The welcome window closed: routes no longer wait for it.
+    func endCaptureDeferral() {
+        guard defersCaptureCheck else { return }
+        defersCaptureCheck = false
+        syncRoutes()
+    }
+
     func retryCaptureCheck() {
         capture.retry()
         syncRoutes()
     }
 
+    /// Changes an app's volume or mute as the user does by hand.
+    private func adjust(_ key: String, _ change: (inout AppVolume) -> Void) {
+        let before = store.volume(for: key, on: outputDeviceUID(for: key))
+        var setting = before
+        change(&setting)
+        guard setting != before else { return }
+        // Muting or unmuting by hand takes over from a solo or Mute All, whose saved mutes no
+        // longer apply.
+        if setting.isMuted != before.isMuted {
+            endSolo(restoring: false)
+            muteAll = nil
+        }
+        apply(setting, to: key)
+    }
+
     private func apply(_ setting: AppVolume, to key: String) {
+        guard !isIgnored(key) else { return }
         store.setVolume(setting, for: key, on: outputDeviceUID(for: key))
         if let index = entries.firstIndex(where: { $0.id == key }) {
             entries[index].volume = setting.volume
@@ -280,39 +461,56 @@ final class MixerModel {
         syncRoutes()
     }
 
-    /// A volume key changes the app in front, not the whole Mac, and shows the overlay. With no app
-    /// in front that the mixer could change (this app, or one with no bundle), the system keeps it.
+    /// A volume key changes the target app, not the whole Mac, and shows the overlay. With no app
+    /// the mixer could change (nothing playing, and this app or one with no bundle in front), the
+    /// system keeps it.
     private func handleVolumeKey(_ key: VolumeKeyTap.Key, isPressed: Bool, isFine: Bool) -> Bool {
-        guard let app = NSWorkspace.shared.frontmostApplication,
-            let appKey = app.bundleIdentifier,
-            appKey != Bundle.main.bundleIdentifier
-        else { return false }
         // The release only has to be kept from the system, like its press.
-        guard isPressed else { return true }
-        var setting = store.volume(for: appKey, on: outputDeviceUID(for: appKey))
-        setting.volume = volumeScale.clamped(setting.volume)
-        switch key {
-        case .up:
-            // Like the system volume, raising it also unmutes.
-            setting.volume = volumeScale.stepped(setting.volume, by: 1, fine: isFine)
-            setting.isMuted = false
-        case .down:
-            setting.volume = volumeScale.stepped(setting.volume, by: -1, fine: isFine)
-        case .mute:
-            endSolo(restoring: false)
-            muteAll = nil
-            setting.isMuted.toggle()
+        guard isPressed else { return tookVolumeKey }
+        guard let appKey = targetApp() else {
+            tookVolumeKey = false
+            return false
         }
-        apply(setting, to: appKey)
-        hud.show(
-            VolumeHUDView(
-                name: app.localizedName ?? appKey,
-                icon: app.icon ?? NSImage(),
-                volume: setting.volume,
-                isMuted: setting.isMuted,
-                scale: volumeScale
-            )
-        )
+        tookVolumeKey = true
+        adjust(appKey) { setting in
+            switch key {
+            case .up:
+                // Like the system volume, raising it also unmutes.
+                setting.volume = volumeScale.stepped(setting.volume, by: 1, fine: isFine)
+                setting.isMuted = false
+            case .down:
+                setting.volume = volumeScale.stepped(setting.volume, by: -1, fine: isFine)
+            case .mute:
+                setting.isMuted.toggle()
+            }
+        }
+        showVolumeOverlay(for: appKey)
+        return true
+    }
+
+    /// A shortcut turns the target app up or down a step, and on while its keys are held. The app is
+    /// picked once per press, so a held key keeps to it.
+    private func holdTargetStep(_ direction: Int) {
+        guard let key = targetApp() else { return }
+        heldKey.press { [weak self] in
+            guard let self else { return false }
+            let before = store.volume(for: key, on: outputDeviceUID(for: key))
+            stepVolume(of: key, by: direction)
+            showVolumeOverlay(for: key)
+            return store.volume(for: key, on: outputDeviceUID(for: key)).volume != before.volume
+        }
+    }
+
+    private func toggleTargetMute() {
+        guard let key = targetApp() else { return }
+        changeMute(.toggle, for: key)
+        showVolumeOverlay(for: key)
+    }
+
+    /// A link or a shortcut that names an ignored app leaves it alone.
+    private func isIgnored(_ key: String) -> Bool {
+        guard ignoredApps.contains(key) else { return false }
+        log.notice("Left \(key, privacy: .public) alone: it is ignored")
         return true
     }
 
@@ -381,6 +579,8 @@ final class MixerModel {
     }
 
     private func syncRoutes() {
+        // Windows close after the app said it quits, and nothing may build a route or a check then.
+        guard !hasShutDown else { return }
         let apps = currentApps()
         if let solo, !apps.contains(where: { $0.key == solo.key }) {
             // The solo app quit; the others get their sound back.
@@ -392,7 +592,7 @@ final class MixerModel {
         for app in apps where !app.settings.isDefault {
             store.adoptVolume(for: app.key, on: app.outputDeviceUID)
         }
-        if routesAudio, apps.contains(where: \.needsRoute), capture.state != .allowed {
+        if routesAudio, !defersCaptureCheck, apps.contains(where: \.needsRoute), capture.state != .allowed {
             capture.begin(on: output.deviceID)
         }
         let canRoute = routesAudio && capture.state == .allowed
@@ -416,8 +616,9 @@ final class MixerModel {
     private func currentApps() -> [AppAudio] {
         var clientsByKey: [String: [AudioClient]] = [:]
         var identityByKey: [String: AppIdentity] = [:]
+        let ignored = Set(ignoredApps)
         for client in monitor.clients.values {
-            guard let identity = identities[client.objectID] else { continue }
+            guard let identity = identities[client.objectID], !ignored.contains(identity.key) else { continue }
             clientsByKey[identity.key, default: []].append(client)
             identityByKey[identity.key] = identity
         }
@@ -461,6 +662,11 @@ final class MixerModel {
         let now = Date()
         for app in apps where app.isPlaying {
             lastPlayed[app.key] = now
+        }
+        let playing = Set(apps.filter(\.isPlaying).map(\.key)).subtracting([Bundle.main.bundleIdentifier ?? ""])
+        playingSince = playingSince.filter { playing.contains($0.key) }
+        for key in playing where playingSince[key] == nil {
+            playingSince[key] = now
         }
         listedKeys.formIntersection(apps.map(\.key))
         let pinned = Set(store.pinnedApps)
@@ -595,7 +801,7 @@ final class MixerModel {
                 volume: output.volume,
                 isMuted: output.isMuted,
                 scale: .standard,
-                status: output.canSetVolume ? nil : "Fixed volume",
+                status: output.canSetVolume ? nil : String(localized: "Fixed volume"),
                 showsLevel: output.canSetVolume
             )
         )
@@ -641,6 +847,9 @@ final class MixerModel {
             let route = app.needsRoute ? ", routed" : ""
             lines.append("  \(app.identity.name) [\(app.key)]: \(state), \(level) on \(app.outputDeviceUID)\(route)")
         }
+        if !ignoredApps.isEmpty {
+            lines.append("Ignored: \(ignoredApps.joined(separator: ", "))")
+        }
         lines.append("Routes:")
         lines += routes.summary().map { "  \($0)" }
         return lines
@@ -650,6 +859,7 @@ final class MixerModel {
     /// running leaves coreaudiod tearing them down for up to a minute, and a mixer launched
     /// meanwhile hangs on its first route.
     func shutDown() {
+        hasShutDown = true
         heartbeat?.cancel()
         heartbeat = nil
         capture.shutDown()

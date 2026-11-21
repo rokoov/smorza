@@ -38,6 +38,14 @@ notarize() {
     echo "Notarized, submission $id"
 }
 
+# A release carries the Shortcuts actions and the translations, which Xcode's tools build.
+for tool in appintentsmetadataprocessor xcstringstool; do
+    if ! xcrun --find "$tool" >/dev/null 2>&1; then
+        echo "A release needs Xcode for $tool: sudo xcode-select -s /Applications/Xcode.app" >&2
+        exit 1
+    fi
+done
+
 plist=Resources/Info.plist
 version=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$plist")
 minimum=$(/usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" "$plist")
