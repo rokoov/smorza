@@ -14,6 +14,7 @@ struct SettingsView: View {
             ShortcutSettings()
             VolumeKeysSettings(volumeKeys: model.volumeKeys)
             OutputSettings(model: model)
+            AppearanceSettings()
             UpdateSettings(updater: updater, onCopyDiagnostics: model.copyDiagnostics)
             ProTeaserSettings()
         }

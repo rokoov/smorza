@@ -35,6 +35,8 @@ final class MixerModel {
     let volumeScale = ProFeatures.volumeScale
     let volumeKeys = VolumeKeys()
     let meters = MeterLevels()
+    /// Each app's colour, for sliders tinted with it.
+    @ObservationIgnored let appTints = AppTints()
     /// Off only for the `--snapshot` previews, which must never touch anyone's audio.
     @ObservationIgnored var routesAudio = true
     /// While the welcome window explains the permission, routes wait, so macOS does not ask first.

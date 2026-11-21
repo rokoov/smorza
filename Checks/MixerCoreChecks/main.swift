@@ -540,5 +540,31 @@ do {
     expect(ScrollStep.keyChange(isUp: false, isFine: true) == -0.01, "with Shift it moves 1%")
 }
 
+// Icon tint: the most common saturated colour of an icon, readable in both appearances.
+do {
+    func pixels(_ colors: [(UInt8, UInt8, UInt8, UInt8)]) -> [UInt8] {
+        colors.flatMap { [$0.0, $0.1, $0.2, $0.3] }
+    }
+    func icon(_ color: (UInt8, UInt8, UInt8), count: Int) -> [(UInt8, UInt8, UInt8, UInt8)] {
+        Array(repeating: (color.0, color.1, color.2, 255), count: count)
+    }
+    let spotify = IconTint.dominant(rgba: pixels(icon((30, 215, 96), count: 80) + icon((0, 0, 0), count: 20)))
+    expect(spotify.map { $0.green > $0.red && $0.green > $0.blue } == true, "a green icon gives green")
+    let mixed = IconTint.dominant(rgba: pixels(icon((20, 90, 230), count: 60) + icon((230, 40, 40), count: 30)))
+    expect(mixed.map { $0.blue > $0.red } == true, "the colour covering more of the icon wins")
+    expect(IconTint.dominant(rgba: pixels(icon((128, 128, 128), count: 100))) == nil, "a grey icon keeps the accent")
+    expect(
+        IconTint.dominant(rgba: pixels(icon((255, 0, 0), count: 1) + icon((200, 200, 200), count: 99))) == nil,
+        "a speck of colour is not enough"
+    )
+    let transparent = Array(repeating: (UInt8(255), UInt8(0), UInt8(0), UInt8(0)), count: 100)
+    expect(IconTint.dominant(rgba: pixels(transparent)) == nil, "transparent pixels count for nothing")
+    if let yellow = IconTint.dominant(rgba: pixels(icon((255, 240, 60), count: 100))) {
+        expect(max(yellow.red, yellow.green, yellow.blue) <= 0.85 + 1e-9, "a light yellow is darkened to stay readable")
+    } else {
+        expect(false, "a yellow icon gives a colour")
+    }
+}
+
 print("\(passed) passed, \(failures) failed")
 exit(failures == 0 ? 0 : 1)

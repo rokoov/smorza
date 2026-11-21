@@ -12,6 +12,7 @@ struct MixerPanel: View {
     /// The row under the pointer, which scrolling turns up or down.
     @State private var hoveredRow: String?
     @State private var scrollMonitor = RowScrollMonitor()
+    @AppStorage(PanelPreferences.tintsSlidersKey) private var tintsSliders = false
     /// Stands for the output device's row among the app rows' keys.
     private static let outputRowID = "output-device"
 
@@ -62,6 +63,7 @@ struct MixerPanel: View {
             footer
         }
         .frame(width: PanelMetrics.width)
+        .modifier(PanelGlass())
         .animation(reduceMotion ? nil : .snappy(duration: 0.22), value: model.entries.map(\.id))
         .background(
             WindowVisibilityReader { isVisible in
@@ -114,7 +116,8 @@ struct MixerPanel: View {
                     onSolo: { model.toggleSolo(for: entry.id) },
                     onChooseOutput: { model.setOutputDevice($0, for: entry.id) },
                     onTogglePin: { model.togglePin(for: entry.id) },
-                    onHover: { hover(entry.id, isInside: $0) }
+                    onHover: { hover(entry.id, isInside: $0) },
+                    tint: tintsSliders ? model.appTints.tint(for: entry.id, icon: entry.icon) : nil
                 )
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }

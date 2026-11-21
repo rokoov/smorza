@@ -15,6 +15,8 @@ struct AppRow: View {
     let onTogglePin: () -> Void
     /// Tells the panel which row the pointer is over, for scrolling.
     let onHover: (Bool) -> Void
+    /// The app's own colour for its slider, level and output icon, or nil for the system accent.
+    var tint: Color?
     @State private var isHovered = false
 
     var body: some View {
@@ -53,6 +55,7 @@ struct AppRow: View {
                 }
                 .help(activity)
         }
+        .tint(tint)
         .onHover { isInside in
             isHovered = isInside
             onHover(isInside)
