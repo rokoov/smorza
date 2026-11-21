@@ -18,7 +18,7 @@ final class SettingsWindow: NSObject {
         if window == nil {
             let host = NSHostingController(rootView: makeContent().frame(height: Self.height))
             let window = NSWindow(contentViewController: host)
-            window.title = "Smorza Settings"
+            window.title = String(localized: "Smorza Settings")
             window.styleMask = [.titled, .closable, .miniaturizable]
             window.isReleasedWhenClosed = false
             window.center()

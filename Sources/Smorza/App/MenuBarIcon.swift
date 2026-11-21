@@ -29,7 +29,9 @@ enum MenuBarIcon {
             case ..<0.67: "speaker.wave.2.fill"
             default: "speaker.wave.3.fill"
             }
-        let description = isMuted ? "Smorza, output muted" : "Smorza, output at \(Int((volume * 100).rounded()))%"
+        let percent = Int((volume * 100).rounded())
+        let description =
+            isMuted ? String(localized: "Smorza, output muted") : String(localized: "Smorza, output at \(percent)%")
         return template(NSImage(systemSymbolName: name, accessibilityDescription: description))
     }
 
@@ -58,7 +60,7 @@ enum MenuBarIcon {
             context.strokePath()
             return true
         }
-        image.accessibilityDescription = "Smorza, all apps muted"
+        image.accessibilityDescription = String(localized: "Smorza, all apps muted")
         return template(image)
     }
 

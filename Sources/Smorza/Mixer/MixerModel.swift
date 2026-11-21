@@ -335,12 +335,12 @@ final class MixerModel {
         }
         hud.show(
             VolumeHUDView(
-                name: "All apps",
+                name: String(localized: "All apps"),
                 icon: NSApp.applicationIconImage ?? NSImage(),
                 volume: 0,
                 isMuted: muteAll != nil,
                 scale: volumeScale,
-                status: muteAll != nil ? "Muted" : "Back as they were",
+                status: muteAll != nil ? String(localized: "Muted") : String(localized: "Back as they were"),
                 showsLevel: false
             )
         )
@@ -796,7 +796,7 @@ final class MixerModel {
                 volume: output.volume,
                 isMuted: output.isMuted,
                 scale: .standard,
-                status: output.canSetVolume ? nil : "Fixed volume",
+                status: output.canSetVolume ? nil : String(localized: "Fixed volume"),
                 showsLevel: output.canSetVolume
             )
         )

@@ -31,7 +31,7 @@ final class WelcomeWindow: NSObject, NSWindowDelegate {
                 rootView: WelcomeView(model: model, onFinish: { [weak self] in self?.close() })
             )
             let window = NSWindow(contentViewController: host)
-            window.title = "Welcome to Smorza"
+            window.title = String(localized: "Welcome to Smorza")
             window.styleMask = [.titled, .closable]
             window.isReleasedWhenClosed = false
             window.delegate = self

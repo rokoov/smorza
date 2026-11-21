@@ -17,7 +17,10 @@ struct OutputDeviceQuery: EntityQuery {
 
     @MainActor
     private func allDevices() -> [OutputDeviceEntity] {
-        let systemDefault = OutputDeviceEntity(id: OutputDeviceEntity.systemDefaultID, name: "System Default")
+        let systemDefault = OutputDeviceEntity(
+            id: OutputDeviceEntity.systemDefaultID,
+            name: String(localized: "System Default")
+        )
         return [systemDefault] + model.output.devices.map { OutputDeviceEntity(id: $0.uid, name: $0.name) }
     }
 }

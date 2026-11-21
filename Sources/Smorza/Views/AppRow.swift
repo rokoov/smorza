@@ -28,7 +28,7 @@ struct AppRow: View {
             volume: entry.volume,
             unityMark: scale.allowsBoost ? scale.unityPosition : nil,
             levelStyle: levelStyle,
-            titleSymbol: entry.isPinned ? (name: "pin.fill", label: "Pinned") : nil,
+            titleSymbol: entry.isPinned ? (name: "pin.fill", label: String(localized: "Pinned")) : nil,
             isMuted: entry.isMuted,
             isEnabled: true,
             onChange: setPosition,
@@ -81,14 +81,14 @@ struct AppRow: View {
     }
 
     private var activity: String {
-        if !entry.isRunning { return "Not running" }
-        return entry.isPlaying ? "Playing" : "Quiet right now"
+        if !entry.isRunning { return String(localized: "Not running") }
+        return entry.isPlaying ? String(localized: "Playing") : String(localized: "Quiet right now")
     }
 
     private var level: String {
-        if entry.isMuted { return "Muted" }
-        let percent = "\(VolumeCurve.percent(entry.volume))%"
-        return entry.isSolo ? "Solo · \(percent)" : percent
+        if entry.isMuted { return String(localized: "Muted") }
+        let percent = VolumeCurve.percent(entry.volume)
+        return entry.isSolo ? String(localized: "Solo · \(percent)%") : "\(percent)%"
     }
 
     private var levelStyle: AnyShapeStyle {

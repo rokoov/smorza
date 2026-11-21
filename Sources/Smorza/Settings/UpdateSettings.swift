@@ -40,8 +40,8 @@ struct UpdateSettings: View {
     private var versionLabel: String {
         switch copyState {
         case .idle: "Smorza \(version)"
-        case .copying: "Copying diagnostics…"
-        case .copied: "Diagnostics copied"
+        case .copying: String(localized: "Copying diagnostics…")
+        case .copied: String(localized: "Diagnostics copied")
         }
     }
 

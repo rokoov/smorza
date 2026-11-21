@@ -8,6 +8,10 @@ struct WelcomeView: View {
     private static let settingsURL = URL(
         string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
     )
+    /// The menu bar icon as it looks there, named "Smorza" for VoiceOver.
+    private static var menuBarIcon: Image {
+        Image(nsImage: MenuBarIcon.image(isAllMuted: false, outputLevel: nil))
+    }
     /// Where the tap is made, for anyone who wants to see what the permission is used for.
     private static let tapCodeURL = URL(
         string: "https://github.com/rokoov/smorza/blob/main/Sources/Smorza/CoreAudio/ProcessTap.swift"
@@ -80,20 +84,16 @@ struct WelcomeView: View {
             .controlSize(.large)
         case .done:
             heading("You're all set", nil)
-            HStack(spacing: 6) {
-                Text("Smorza lives in your menu bar. Click")
-                Image(systemName: "slider.horizontal.3")
-                    .accessibilityLabel("the Smorza icon")
-                Text("to open the mixer.")
-            }
-            .foregroundStyle(.secondary)
+            // One sentence with the icon in it, so it wraps as a whole and translations can move the icon.
+            message("Smorza lives in your menu bar. Click \(Self.menuBarIcon) to open the mixer.")
+                .foregroundStyle(.secondary)
             Button("Done", action: onFinish)
                 .keyboardShortcut(.defaultAction)
                 .controlSize(.large)
         }
     }
 
-    private func heading(_ title: String, _ subtitle: String?) -> some View {
+    private func heading(_ title: LocalizedStringKey, _ subtitle: LocalizedStringKey?) -> some View {
         VStack(spacing: 6) {
             Text(title)
                 .font(.title2.weight(.semibold))
@@ -106,7 +106,7 @@ struct WelcomeView: View {
         }
     }
 
-    private func message(_ text: String) -> some View {
+    private func message(_ text: LocalizedStringKey) -> some View {
         Text(text)
             .multilineTextAlignment(.center)
             .fixedSize(horizontal: false, vertical: true)

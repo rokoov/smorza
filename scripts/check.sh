@@ -42,6 +42,14 @@ if xcrun --find appintentsmetadataprocessor >/dev/null 2>&1; then
         || plutil -extract actions json -o - "$actions" | grep -q SetAppVolumeIntent \
         || { echo "Metadata.appintents has no Set App Volume action"; exit 1; }
 fi
+# Every string in every language, and the compiled files in the app.
+if xcrun --find xcstringstool >/dev/null 2>&1; then
+    python3 -I scripts/check-translations.py Resources/*.xcstrings
+    for language in en de fr hr; do
+        [[ -d "build/Smorza.app/Contents/Resources/$language.lproj" ]] || { echo "$language.lproj is missing"; exit 1; }
+    done
+    [[ -f build/Smorza.app/Contents/Resources/de.lproj/Localizable.strings ]] || { echo "No German strings"; exit 1; }
+fi
 shopt -s nullglob
 for resources in "$(swift build -c release --show-bin-path)"/*.bundle; do
     name=$(basename "$resources")

@@ -9,7 +9,8 @@ struct OutputRow: View {
         MixerRow(
             title: output.name,
             level: output.canSetVolume
-                ? (output.isMuted ? "Muted" : "\(VolumeCurve.percent(output.volume))%") : "Fixed",
+                ? (output.isMuted ? String(localized: "Muted") : "\(VolumeCurve.percent(output.volume))%")
+                : String(localized: "Fixed"),
             position: output.volume,
             volume: output.volume,
             isMuted: output.isMuted,
