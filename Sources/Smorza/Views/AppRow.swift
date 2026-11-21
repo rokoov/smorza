@@ -13,6 +13,7 @@ struct AppRow: View {
     let onSolo: () -> Void
     let onChooseOutput: (OutputDevice?) -> Void
     let onTogglePin: () -> Void
+    let onIgnore: () -> Void
     /// Tells the panel which row the pointer is over, for scrolling.
     let onHover: (Bool) -> Void
     /// The app's own colour for its slider, level and output icon, or nil for the system accent.
@@ -73,6 +74,9 @@ struct AppRow: View {
                     onChoose: onChooseOutput
                 )
             }
+            Divider()
+            Button("Ignore \(entry.name)", action: onIgnore)
+                .help("Smorza leaves this app's sound alone and stops listing it. Settings lists ignored apps.")
         }
     }
 

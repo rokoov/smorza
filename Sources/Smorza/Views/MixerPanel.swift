@@ -111,6 +111,7 @@ struct MixerPanel: View {
                     onSolo: { model.toggleSolo(for: entry.id) },
                     onChooseOutput: { model.setOutputDevice($0, for: entry.id) },
                     onTogglePin: { model.togglePin(for: entry.id) },
+                    onIgnore: { model.ignore(entry.id) },
                     onHover: { hover(entry.id, isInside: $0) },
                     tint: tintsSliders ? model.appTints.tint(for: entry.id, icon: entry.icon) : nil
                 )

@@ -666,5 +666,36 @@ do {
     )
 }
 
+// Ignored apps: never routed, forgotten otherwise, and never pinned at the same time.
+do {
+    let defaults = UserDefaults(suiteName: "ignore-check")!
+    defaults.removePersistentDomain(forName: "ignore-check")
+    let store = MixerSettingsStore(defaults: defaults)
+    store.setVolume(AppVolume(volume: 0.2, isMuted: true), for: "com.apple.Music", on: "speakers")
+    store.setOutputDevice(uid: "headphones", name: "Headphones", for: "com.apple.Music")
+    store.setPinned(true, for: "com.apple.Music")
+    store.setIgnored(true, for: "com.apple.Music")
+    let ignored = store.settings(for: "com.apple.Music")
+    expect(store.ignoredApps == ["com.apple.Music"] && store.pinnedApps.isEmpty, "ignoring unpins")
+    expect(ignored == AppSettings(isIgnored: true), "and forgets the volume and device")
+    expect(!ignored.isDefault, "an ignored app is worth keeping")
+    expect(
+        !AppSettings(volumes: ["speakers": AppVolume(volume: 0.2)], isIgnored: true)
+            .needsRoute(systemOutputUID: "speakers", connectedUIDs: ["speakers"], scale: .standard),
+        "an ignored app is never routed"
+    )
+    expect(MixerSettingsStore(defaults: defaults).ignoredApps == ["com.apple.Music"], "it stays ignored")
+    store.resetApps()
+    expect(store.ignoredApps == ["com.apple.Music"], "a reset keeps it ignored")
+    store.setPinned(true, for: "com.apple.Music")
+    expect(store.ignoredApps.isEmpty && store.pinnedApps == ["com.apple.Music"], "pinning brings it back")
+    store.setIgnored(true, for: "com.apple.Music")
+    store.setIgnored(false, for: "com.apple.Music")
+    expect(store.appKeys.isEmpty, "and so does stopping to ignore it, as a new app")
+    let old = Data(#"{"volumes":{},"isPinned":true}"#.utf8)
+    expect((try? JSONDecoder().decode(AppSettings.self, from: old))?.isIgnored == false, "old saves load not ignored")
+    defaults.removePersistentDomain(forName: "ignore-check")
+}
+
 print("\(passed) passed, \(failures) failed")
 exit(failures == 0 ? 0 : 1)

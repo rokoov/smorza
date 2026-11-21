@@ -17,6 +17,8 @@ final class AppResolver {
     }()
 
     private static let genericIcon = NSWorkspace.shared.icon(for: .unixExecutable)
+    /// Starts the key of a process that belongs to no app bundle; the rest is its name.
+    private static let processPrefix = "process:"
 
     private var cache: [pid_t: AppIdentity] = [:]
     private var bundleCache: [String: AppIdentity] = [:]
@@ -41,6 +43,14 @@ final class AppResolver {
         return identity
     }
 
+    /// An app by its key, also while it is not running, for the lists of saved apps.
+    func identity(forKey key: String) -> AppIdentity {
+        if key.hasPrefix(Self.processPrefix) {
+            return AppIdentity(key: key, name: String(key.dropFirst(Self.processPrefix.count)), icon: Self.genericIcon)
+        }
+        return identity(forBundleIdentifier: key) ?? AppIdentity(key: key, name: key, icon: Self.genericIcon)
+    }
+
     func forget(allBut alive: Set<pid_t>) {
         cache = cache.filter { alive.contains($0.key) }
     }
@@ -59,7 +69,7 @@ final class AppResolver {
             return Self.identity(of: own)
         }
         let name = bundleID.flatMap { Self.systemNames[$0] } ?? Self.processName(pid) ?? bundleID ?? "Process \(pid)"
-        return AppIdentity(key: bundleID ?? "process:\(name)", name: name, icon: Self.genericIcon)
+        return AppIdentity(key: bundleID ?? Self.processPrefix + name, name: name, icon: Self.genericIcon)
     }
 
     /// Daemons that play sound the user recognises, under a readable name.
@@ -80,7 +90,7 @@ final class AppResolver {
 
     private static func identity(of app: NSRunningApplication) -> AppIdentity {
         let name = app.localizedName ?? app.bundleIdentifier ?? "Process \(app.processIdentifier)"
-        return AppIdentity(key: app.bundleIdentifier ?? "process:\(name)", name: name, icon: app.icon ?? genericIcon)
+        return AppIdentity(key: app.bundleIdentifier ?? processPrefix + name, name: name, icon: app.icon ?? genericIcon)
     }
 
     private static func processName(_ pid: pid_t) -> String? {

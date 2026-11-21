@@ -30,6 +30,8 @@ final class MixerModel {
     private(set) var muteAll: MuteAllSession?
     /// The user's order of output devices, for automatic switching.
     private(set) var outputPriority = OutputPriority()
+    /// The apps Smorza leaves alone, by key.
+    private(set) var ignoredApps: [String] = []
     let output = SystemOutput()
     /// How far the sliders go: to 100%, or to 200% where boost is on.
     let volumeScale = ProFeatures.volumeScale
@@ -79,6 +81,7 @@ final class MixerModel {
         output.onDevicesChange = { [weak self] in self?.outputDevicesChanged() }
         output.onLevelsChange = { [weak self] in self?.outputLevelsChanged() }
         outputPriority = store.outputPriority
+        ignoredApps = store.ignoredApps
         capture.onFinish = { [weak self] in self?.syncRoutes() }
         routes.onRetry = { [weak self] in self?.syncRoutes() }
         routes.onRoutesChanged = { [weak self] in self?.updateBackgroundWork() }
@@ -186,10 +189,8 @@ final class MixerModel {
         // macOS does not announce every start, and here the order matters.
         monitor.refreshPlaying()
         let frontmost = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
-        return TargetApp.choose(
-            playingSince: playingSince,
-            frontmost: frontmost == Bundle.main.bundleIdentifier ? nil : frontmost
-        )
+            .flatMap { $0 == Bundle.main.bundleIdentifier || ignoredApps.contains($0) ? nil : $0 }
+        return TargetApp.choose(playingSince: playingSince, frontmost: frontmost)
     }
 
     /// Every app back to 100%, unmuted, on the system output, for the reset link. Pins stay.
@@ -235,10 +236,40 @@ final class MixerModel {
         )
     }
 
+    /// Releases an app: no tap, its sound as macOS plays it, and no row. Its volumes, device and
+    /// pin are forgotten.
+    func ignore(_ key: String) {
+        let name = entries.first { $0.id == key }?.name ?? key
+        if solo?.key == key {
+            endSolo(restoring: true)
+        }
+        store.setIgnored(true, for: key)
+        ignoredApps = store.ignoredApps
+        routes.clearFailures(for: key)
+        listedKeys.remove(key)
+        log.notice("Ignoring \(name, privacy: .public)")
+        syncRoutes()
+    }
+
+    func stopIgnoring(_ key: String) {
+        store.setIgnored(false, for: key)
+        ignoredApps = store.ignoredApps
+        let name = resolver.identity(forKey: key).name
+        log.notice("No longer ignoring \(name, privacy: .public)")
+        syncRoutes()
+    }
+
+    /// An ignored app's name and icon, also while it is not running.
+    func ignoredIdentity(_ key: String) -> AppIdentity {
+        resolver.identity(forKey: key)
+    }
+
     /// Running apps with a bundle, for the app picker of the Shortcuts actions.
     func shortcutApps() -> [AppIdentity] {
-        NSWorkspace.shared.runningApplications
+        let ignored = Set(ignoredApps)
+        return NSWorkspace.shared.runningApplications
             .filter { $0.activationPolicy == .regular && $0.bundleIdentifier != Bundle.main.bundleIdentifier }
+            .filter { !ignored.contains($0.bundleIdentifier ?? "") }
             .compactMap { app in
                 guard let key = app.bundleIdentifier else { return nil }
                 return AppIdentity(key: key, name: app.localizedName ?? key, icon: app.icon ?? NSImage())
@@ -347,6 +378,7 @@ final class MixerModel {
 
     /// Sends the app to `device`, or back to the system output with nil.
     func setOutputDevice(_ device: OutputDevice?, for key: String) {
+        guard !isIgnored(key) else { return }
         store.setOutputDevice(uid: device?.uid, name: device?.name, for: key)
         routes.clearFailures(for: key)
         syncRoutes()
@@ -409,6 +441,7 @@ final class MixerModel {
     }
 
     private func apply(_ setting: AppVolume, to key: String) {
+        guard !isIgnored(key) else { return }
         store.setVolume(setting, for: key, on: outputDeviceUID(for: key))
         if let index = entries.firstIndex(where: { $0.id == key }) {
             entries[index].volume = setting.volume
@@ -464,6 +497,13 @@ final class MixerModel {
         guard let key = targetApp() else { return }
         changeMute(.toggle, for: key)
         showVolumeOverlay(for: key)
+    }
+
+    /// A link or a shortcut that names an ignored app leaves it alone.
+    private func isIgnored(_ key: String) -> Bool {
+        guard ignoredApps.contains(key) else { return false }
+        log.notice("Left \(key, privacy: .public) alone: it is ignored")
+        return true
     }
 
     /// Every app in the mixer with the volume and mute it has now.
@@ -566,8 +606,9 @@ final class MixerModel {
     private func currentApps() -> [AppAudio] {
         var clientsByKey: [String: [AudioClient]] = [:]
         var identityByKey: [String: AppIdentity] = [:]
+        let ignored = Set(ignoredApps)
         for client in monitor.clients.values {
-            guard let identity = identities[client.objectID] else { continue }
+            guard let identity = identities[client.objectID], !ignored.contains(identity.key) else { continue }
             clientsByKey[identity.key, default: []].append(client)
             identityByKey[identity.key] = identity
         }
@@ -795,6 +836,9 @@ final class MixerModel {
             let state = app.isPlaying ? "playing" : "idle"
             let route = app.needsRoute ? ", routed" : ""
             lines.append("  \(app.identity.name) [\(app.key)]: \(state), \(level) on \(app.outputDeviceUID)\(route)")
+        }
+        if !ignoredApps.isEmpty {
+            lines.append("Ignored: \(ignoredApps.joined(separator: ", "))")
         }
         lines.append("Routes:")
         lines += routes.summary().map { "  \($0)" }
