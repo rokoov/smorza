@@ -34,6 +34,14 @@ for key in NSAudioCaptureUsageDescription LSUIElement CFBundleIdentifier SUFeedU
     /usr/libexec/PlistBuddy -c "Print :$key" "$plist" >/dev/null || { echo "Info.plist is missing $key"; exit 1; }
 done
 [[ -d build/Smorza.app/Contents/Frameworks/Sparkle.framework ]] || { echo "Sparkle.framework is missing"; exit 1; }
+# The Shortcuts actions, when Xcode's metadata processor is there to build them.
+if xcrun --find appintentsmetadataprocessor >/dev/null 2>&1; then
+    actions="build/Smorza.app/Contents/Resources/Metadata.appintents/extract.actionsdata"
+    [[ -f "$actions" ]] || { echo "Metadata.appintents is missing from the app"; exit 1; }
+    plutil -extract actions.SetAppVolumeIntent raw -o - "$actions" >/dev/null 2>&1 \
+        || plutil -extract actions json -o - "$actions" | grep -q SetAppVolumeIntent \
+        || { echo "Metadata.appintents has no Set App Volume action"; exit 1; }
+fi
 shopt -s nullglob
 for resources in "$(swift build -c release --show-bin-path)"/*.bundle; do
     name=$(basename "$resources")

@@ -137,6 +137,34 @@ final class MixerModel {
         setVolume(volumeScale.volume(atPosition: position), for: key)
     }
 
+    /// Mutes or unmutes an app, for the Shortcuts actions.
+    func setMuted(_ isMuted: Bool, for key: String) {
+        guard store.volume(for: key, on: outputDeviceUID(for: key)).isMuted != isMuted else { return }
+        toggleMute(for: key)
+    }
+
+    /// Mute All on or off, for the Shortcuts actions.
+    func setAllMuted(_ isMuted: Bool) {
+        guard isMuted != (muteAll != nil) else { return }
+        toggleMuteAll()
+    }
+
+    /// Running apps with a bundle, for the app picker of the Shortcuts actions.
+    func shortcutApps() -> [AppIdentity] {
+        NSWorkspace.shared.runningApplications
+            .filter { $0.activationPolicy == .regular && $0.bundleIdentifier != Bundle.main.bundleIdentifier }
+            .compactMap { app in
+                guard let key = app.bundleIdentifier else { return nil }
+                return AppIdentity(key: key, name: app.localizedName ?? key, icon: app.icon ?? NSImage())
+            }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    /// An app a shortcut names, running or only installed.
+    func shortcutApp(id: String) -> AppIdentity? {
+        shortcutApps().first { $0.key == id } ?? resolver.identity(forBundleIdentifier: id)
+    }
+
     /// Keeps an app's row while it is quiet or not running, or lets it go again.
     func togglePin(for key: String) {
         let isPinned = !store.settings(for: key).isPinned

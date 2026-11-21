@@ -23,6 +23,19 @@ let package = Package(
                 .product(name: "KeyboardShortcuts", package: "KeyboardShortcuts"),
             ],
             path: "Sources/Smorza",
+            swiftSettings: [
+                // App Intents: the compiler writes the values Shortcuts needs, and scripts/bundle.sh turns them
+                // into the app's Metadata.appintents, as Xcode would. The protocol list is Apple's, from the
+                // toolchain (usr/share/swift/SwiftConstantValues/AppIntents.json).
+                .unsafeFlags(
+                    [
+                        "-emit-const-values-path", "\(Context.packageDirectory)/.build/Smorza.swiftconstvalues",
+                        "-Xfrontend", "-const-gather-protocols-file",
+                        "-Xfrontend", "\(Context.packageDirectory)/scripts/app-intents-protocols.json",
+                    ],
+                    .when(configuration: .release)
+                )
+            ],
             linkerSettings: [
                 .linkedFramework("AudioToolbox"),
                 .linkedFramework("CoreAudio"),

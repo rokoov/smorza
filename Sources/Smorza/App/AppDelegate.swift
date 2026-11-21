@@ -1,3 +1,4 @@
+import AppIntents
 import AppKit
 
 /// Owns the model and the updater, so routing starts at launch rather than when the panel first
@@ -8,6 +9,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let updater = Updater()
     let welcome = WelcomeWindow()
     private var signalSources: [DispatchSourceSignal] = []
+
+    override init() {
+        super.init()
+        // The Shortcuts actions run in this process and reach the mixer through this.
+        let model = model
+        AppDependencyManager.shared.add(dependency: model)
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let isFirstLaunch = welcome.isFirstLaunch
