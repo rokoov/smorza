@@ -15,6 +15,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var links: LinkHandler?
     /// Links that arrive while the app is still starting, as when one launches it.
     private var waitingLinks: [URL] = []
+    /// Counts the menu bar icon's updates, so only the newest one keeps watching the model.
+    private var iconUpdate = 0
+    private var showsVolumeInMenuBar = false
+    private var defaultsObserver: NSObjectProtocol?
     private var signalSources: [DispatchSourceSignal] = []
 
     override init() {
@@ -51,6 +55,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         self.panel = panel
+        watchMenuBarIcon()
         KeyboardShortcuts.onKeyDown(for: .togglePanel) { [weak self] in
             self?.panel?.toggle()
         }
@@ -73,6 +78,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if panel?.isShown != true {
             previousApp.handBackAfterLink()
         }
+    }
+
+    /// Redraws the menu bar icon whenever Mute All, the output volume or the setting changes.
+    private func watchMenuBarIcon() {
+        showsVolumeInMenuBar = UserDefaults.standard.bool(forKey: PanelPreferences.showsVolumeInMenuBarKey)
+        defaultsObserver = NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.settingsChanged() }
+        }
+        updateMenuBarIcon()
+    }
+
+    private func updateMenuBarIcon() {
+        iconUpdate += 1
+        let update = iconUpdate
+        let shows = showsVolumeInMenuBar
+        let image = withObservationTracking {
+            MenuBarIcon.image(
+                isAllMuted: model.muteAll != nil,
+                outputLevel: shows ? (model.output.volume, model.output.isMuted) : nil
+            )
+        } onChange: { [weak self] in
+            Task { @MainActor in
+                guard let self, self.iconUpdate == update else { return }
+                self.updateMenuBarIcon()
+            }
+        }
+        panel?.setIcon(image)
+    }
+
+    private func settingsChanged() {
+        let shows = UserDefaults.standard.bool(forKey: PanelPreferences.showsVolumeInMenuBarKey)
+        guard shows != showsVolumeInMenuBar else { return }
+        showsVolumeInMenuBar = shows
+        updateMenuBarIcon()
     }
 
     @objc func showSettings(_ sender: Any?) {

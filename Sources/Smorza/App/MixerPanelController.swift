@@ -44,12 +44,10 @@ final class MixerPanelController: NSObject, NSWindowDelegate {
             button.action = #selector(iconClicked)
             button.sendAction(on: [.leftMouseDown, .rightMouseDown])
         }
-        setIcon(symbolName: "slider.horizontal.3")
+        setIcon(MenuBarIcon.image(isAllMuted: false, outputLevel: nil))
     }
 
-    func setIcon(symbolName: String) {
-        let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: "Smorza")
-        image?.isTemplate = true
+    func setIcon(_ image: NSImage) {
         statusItem.button?.image = image
     }
 

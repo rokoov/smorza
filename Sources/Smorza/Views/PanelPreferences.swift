@@ -2,4 +2,5 @@
 enum PanelPreferences {
     static let tintsSlidersKey = "TintsSlidersWithAppColour"
     static let showsAlertsKey = "ShowsNotificationsAndAlerts"
+    static let showsVolumeInMenuBarKey = "ShowsOutputVolumeInMenuBar"
 }
