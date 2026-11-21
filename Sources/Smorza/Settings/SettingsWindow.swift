@@ -21,7 +21,8 @@ final class SettingsWindow: NSObject {
             window.title = String(localized: "Smorza Settings")
             window.styleMask = [.titled, .closable, .miniaturizable]
             window.isReleasedWhenClosed = false
-            window.center()
+            window.collectionBehavior = WindowPlacement.behavior
+            WindowPlacement.center(window)
             self.window = window
         }
         // A menu bar app is not active, so the window would open behind the others.

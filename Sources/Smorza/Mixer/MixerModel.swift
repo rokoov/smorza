@@ -67,6 +67,8 @@ final class MixerModel {
     @ObservationIgnored private var rowSummary: [String] = []
     private(set) var isPanelVisible = false
     @ObservationIgnored private var isDemo = false
+    /// Set once the app quits: from then on nothing touches audio.
+    @ObservationIgnored private var hasShutDown = false
     @ObservationIgnored private var heartbeat: Task<Void, Never>?
     @ObservationIgnored private var meterLoop: Task<Void, Never>?
     @ObservationIgnored private var napBlocker: NSObjectProtocol?
@@ -413,6 +415,7 @@ final class MixerModel {
 
     /// Starts the capture check, which makes macOS ask for the permission the first time.
     func requestCapturePermission() {
+        guard !hasShutDown else { return }
         defersCaptureCheck = false
         capture.retry()
         capture.begin(on: output.deviceID)
@@ -576,6 +579,8 @@ final class MixerModel {
     }
 
     private func syncRoutes() {
+        // Windows close after the app said it quits, and nothing may build a route or a check then.
+        guard !hasShutDown else { return }
         let apps = currentApps()
         if let solo, !apps.contains(where: { $0.key == solo.key }) {
             // The solo app quit; the others get their sound back.
@@ -854,6 +859,7 @@ final class MixerModel {
     /// running leaves coreaudiod tearing them down for up to a minute, and a mixer launched
     /// meanwhile hangs on its first route.
     func shutDown() {
+        hasShutDown = true
         heartbeat?.cancel()
         heartbeat = nil
         capture.shutDown()

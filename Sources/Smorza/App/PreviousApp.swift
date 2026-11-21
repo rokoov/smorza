@@ -48,6 +48,7 @@ final class PreviousApp {
         guard !NSApp.windows.contains(where: { $0.isVisible && $0.canBecomeKey }),
             let app, !app.isTerminated
         else { return }
+        log.notice("Handing the keyboard back to \(app.localizedName ?? "the app before", privacy: .public)")
         app.activate()
     }
 

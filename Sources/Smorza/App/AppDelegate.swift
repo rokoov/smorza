@@ -21,7 +21,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var defaultsObserver: NSObjectProtocol?
     private var signalSources: [DispatchSourceSignal] = []
 
-    override init() {
+    /// No welcome window seen yet: routes wait for it, so macOS does not ask before it explains.
+    private let isFirstLaunch: Bool
+
+    init(isFirstLaunch: Bool) {
+        self.isFirstLaunch = isFirstLaunch
         super.init()
         // The Shortcuts actions run in this process and reach the mixer through this.
         let model = model
@@ -29,7 +33,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        let isFirstLaunch = welcome.isFirstLaunch
         if isFirstLaunch {
             model.defersCaptureCheck = true
         }
@@ -126,6 +129,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        welcome.isQuitting = true
         model.shutDown()
     }
 
