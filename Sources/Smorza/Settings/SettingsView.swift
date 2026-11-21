@@ -20,6 +20,5 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .frame(width: Self.width)
-        .fixedSize(horizontal: false, vertical: true)
     }
 }

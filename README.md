@@ -64,6 +64,33 @@ If you clicked Don't Allow, turn Smorza on under **System Settings → Privacy &
 Audio Recording → System Audio Recording Only** and press **Try Again** in the panel. Until then every app plays
 at full volume.
 
+## Shortcuts and links
+
+Smorza adds five actions to the Shortcuts app: **Set App Volume**, **Mute App**, **Set App Output Device**, **Mute
+All Apps** and **Unmute All Apps**. Spotlight and Siri offer them too ("Mute all apps with Smorza").
+
+The same actions work as `smorza://` links, for Terminal, Raycast, Alfred or the **Open URLs** action in Shortcuts.
+An app is named by its bundle identifier (`osascript -e 'id of app "Spotify"'` prints it), or by the name the
+panel shows. Repeat `app=` to change several apps at once.
+
+| Link | What it does |
+| --- | --- |
+| `smorza://set-volume?app=com.spotify.client&volume=40` | Sets the volume, 0 to 100 |
+| `smorza://step-volume?app=com.spotify.client&direction=up` | Turns the app up or down 5%; up also unmutes it |
+| `smorza://mute?app=com.spotify.client&muted=true` | `true` mutes, `false` unmutes, `toggle` (or nothing) toggles |
+| `smorza://set-output?app=com.spotify.client&device=AirPods%20Pro` | Sends the app to a device, by name or UID; `device=default` sends it back to the system output |
+| `smorza://mute-all?muted=toggle` | Mute All on, off or toggled, as with `mute` |
+| `smorza://reset` | Every app back to 100%, unmuted, on the system output; pins stay |
+| `smorza://open` | Opens the panel |
+
+Spaces in a device name are `%20` or `+`. A link that names an unknown action, app or device does nothing, and the
+log says why (see [Debugging](#debugging)).
+
+- **Terminal**: `open "smorza://set-volume?app=com.spotify.client&app=com.hnc.Discord&volume=30"`
+- **Raycast**: create a Quicklink with the link as its address and give it a hotkey. `{argument}` in the link asks
+  for a value each time: `smorza://set-volume?app=com.spotify.client&volume={argument}`
+- **Shortcuts**: add **Open URLs** with the link, or use the Smorza actions directly
+
 ## Build from source
 
 Needs macOS 14.4 or later and Swift 5.9 or later. The Command Line Tools are enough (`xcode-select --install`).

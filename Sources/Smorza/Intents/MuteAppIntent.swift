@@ -18,11 +18,7 @@ struct MuteAppIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
-        switch action {
-        case .mute: model.setMuted(true, for: app.id)
-        case .unmute: model.setMuted(false, for: app.id)
-        case .toggle: model.toggleMute(for: app.id)
-        }
+        model.changeMute(action.change, for: app.id)
         return .result()
     }
 }

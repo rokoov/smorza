@@ -34,7 +34,9 @@ final class AppResolver {
         if let cached = bundleCache[bundleID] { return cached }
         guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return nil }
         let name = (FileManager.default.displayName(atPath: url.path) as NSString).deletingPathExtension
-        let identity = AppIdentity(key: bundleID, name: name, icon: NSWorkspace.shared.icon(forFile: url.path))
+        // Launch Services ignores case, and the key has to be the app's own spelling.
+        let key = Bundle(url: url)?.bundleIdentifier ?? bundleID
+        let identity = AppIdentity(key: key, name: name, icon: NSWorkspace.shared.icon(forFile: url.path))
         bundleCache[bundleID] = identity
         return identity
     }

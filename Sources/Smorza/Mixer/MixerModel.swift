@@ -56,7 +56,7 @@ final class MixerModel {
     /// False until the first output device is read, so starting up shows no overlay.
     @ObservationIgnored private var hasLoadedOutput = false
     @ObservationIgnored private var rowSummary: [String] = []
-    @ObservationIgnored private var isPanelVisible = false
+    private(set) var isPanelVisible = false
     @ObservationIgnored private var isDemo = false
     @ObservationIgnored private var heartbeat: Task<Void, Never>?
     @ObservationIgnored private var meterLoop: Task<Void, Never>?
@@ -139,16 +139,69 @@ final class MixerModel {
         setVolume(volumeScale.volume(atPosition: position), for: key)
     }
 
-    /// Mutes or unmutes an app, for the Shortcuts actions.
-    func setMuted(_ isMuted: Bool, for key: String) {
-        guard store.volume(for: key, on: outputDeviceUID(for: key)).isMuted != isMuted else { return }
-        toggleMute(for: key)
+    /// Mutes, unmutes or toggles an app, for the Shortcuts actions and links.
+    func changeMute(_ change: MuteChange, for key: String) {
+        adjust(key) { $0.isMuted = change.applied(to: $0.isMuted) }
     }
 
-    /// Mute All on or off, for the Shortcuts actions.
-    func setAllMuted(_ isMuted: Bool) {
-        guard isMuted != (muteAll != nil) else { return }
+    /// Mute All on, off or toggled, for the Shortcuts actions and links.
+    func changeMuteAll(_ change: MuteChange) {
+        guard change.applied(to: muteAll != nil) != (muteAll != nil) else { return }
         toggleMuteAll()
+    }
+
+    /// Turns an app up or down one 5% step, for the shortcuts and links. Turning it up unmutes it,
+    /// like the volume keys.
+    func stepVolume(of key: String, by direction: Int) {
+        adjust(key) { setting in
+            setting.volume = volumeScale.shortcutStepped(setting.volume, by: direction)
+            if direction > 0 {
+                setting.isMuted = false
+            }
+        }
+    }
+
+    /// Every app back to 100%, unmuted, on the system output, for the reset link. Pins stay.
+    func resetAll() {
+        endSolo(restoring: false)
+        muteAll = nil
+        for key in store.appKeys {
+            routes.clearFailures(for: key)
+        }
+        store.resetApps()
+        log.notice("Reset every app")
+        syncRoutes()
+    }
+
+    /// The app a link names, by bundle identifier or by name, among the apps in the mixer, the
+    /// running apps and then the installed ones.
+    func appKey(matching name: String) -> String? {
+        let known = entries.map { ($0.id, $0.name) } + shortcutApps().map { ($0.key, $0.name) }
+        if let match = known.first(where: { $0.0.caseInsensitiveCompare(name) == .orderedSame }) {
+            return match.0
+        }
+        if let match = known.first(where: { $0.1.localizedCaseInsensitiveCompare(name) == .orderedSame }) {
+            return match.0
+        }
+        return resolver.identity(forBundleIdentifier: name)?.key
+    }
+
+    /// Shows an app's volume in the overlay, for a change made with the panel closed.
+    func showVolumeOverlay(for key: String) {
+        let identity =
+            entries.first { $0.id == key }.map { (name: $0.name, icon: $0.icon) }
+            ?? shortcutApp(id: key).map { (name: $0.name, icon: $0.icon) }
+        guard let identity else { return }
+        let setting = store.volume(for: key, on: outputDeviceUID(for: key))
+        hud.show(
+            VolumeHUDView(
+                name: identity.name,
+                icon: identity.icon,
+                volume: volumeScale.clamped(setting.volume),
+                isMuted: setting.isMuted,
+                scale: volumeScale
+            )
+        )
     }
 
     /// Running apps with a bundle, for the app picker of the Shortcuts actions.
@@ -177,12 +230,7 @@ final class MixerModel {
     }
 
     func toggleMute(for key: String) {
-        // Muting by hand takes over from a solo or Mute All, whose saved mutes no longer apply.
-        endSolo(restoring: false)
-        muteAll = nil
-        var setting = store.volume(for: key, on: outputDeviceUID(for: key))
-        setting.isMuted.toggle()
-        apply(setting, to: key)
+        changeMute(.toggle, for: key)
     }
 
     /// Mutes every other app in the mixer and unmutes this one. Soloing it again, or quitting it,
@@ -314,6 +362,21 @@ final class MixerModel {
         syncRoutes()
     }
 
+    /// Changes an app's volume or mute as the user does by hand.
+    private func adjust(_ key: String, _ change: (inout AppVolume) -> Void) {
+        let before = store.volume(for: key, on: outputDeviceUID(for: key))
+        var setting = before
+        change(&setting)
+        guard setting != before else { return }
+        // Muting or unmuting by hand takes over from a solo or Mute All, whose saved mutes no
+        // longer apply.
+        if setting.isMuted != before.isMuted {
+            endSolo(restoring: false)
+            muteAll = nil
+        }
+        apply(setting, to: key)
+    }
+
     private func apply(_ setting: AppVolume, to key: String) {
         store.setVolume(setting, for: key, on: outputDeviceUID(for: key))
         if let index = entries.firstIndex(where: { $0.id == key }) {
@@ -335,30 +398,19 @@ final class MixerModel {
         else { return false }
         // The release only has to be kept from the system, like its press.
         guard isPressed else { return true }
-        var setting = store.volume(for: appKey, on: outputDeviceUID(for: appKey))
-        setting.volume = volumeScale.clamped(setting.volume)
-        switch key {
-        case .up:
-            // Like the system volume, raising it also unmutes.
-            setting.volume = volumeScale.stepped(setting.volume, by: 1, fine: isFine)
-            setting.isMuted = false
-        case .down:
-            setting.volume = volumeScale.stepped(setting.volume, by: -1, fine: isFine)
-        case .mute:
-            endSolo(restoring: false)
-            muteAll = nil
-            setting.isMuted.toggle()
+        adjust(appKey) { setting in
+            switch key {
+            case .up:
+                // Like the system volume, raising it also unmutes.
+                setting.volume = volumeScale.stepped(setting.volume, by: 1, fine: isFine)
+                setting.isMuted = false
+            case .down:
+                setting.volume = volumeScale.stepped(setting.volume, by: -1, fine: isFine)
+            case .mute:
+                setting.isMuted.toggle()
+            }
         }
-        apply(setting, to: appKey)
-        hud.show(
-            VolumeHUDView(
-                name: app.localizedName ?? appKey,
-                icon: app.icon ?? NSImage(),
-                volume: setting.volume,
-                isMuted: setting.isMuted,
-                scale: volumeScale
-            )
-        )
+        showVolumeOverlay(for: appKey)
         return true
     }
 

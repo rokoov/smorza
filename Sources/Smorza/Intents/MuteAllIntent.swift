@@ -8,7 +8,7 @@ struct MuteAllIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
-        model.setAllMuted(true)
+        model.changeMuteAll(.mute)
         return .result()
     }
 }

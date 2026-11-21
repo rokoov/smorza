@@ -6,9 +6,9 @@ import SwiftUI
 struct MixerPanel: View {
     let model: MixerModel
     let updater: Updater
+    let onOpenSettings: () -> Void
     @State private var isSavingProfile = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.openSettings) private var openSettings
     /// The row under the pointer, which scrolling turns up or down.
     @State private var hoveredRow: String?
     @State private var scrollMonitor = RowScrollMonitor()
@@ -63,20 +63,15 @@ struct MixerPanel: View {
             footer
         }
         .frame(width: PanelMetrics.width)
-        .modifier(PanelGlass())
         .animation(reduceMotion ? nil : .snappy(duration: 0.22), value: model.entries.map(\.id))
-        .background(
-            WindowVisibilityReader { isVisible in
-                if isVisible {
-                    model.panelDidAppear()
-                    scrollMonitor.start(scroll)
-                } else {
-                    scrollMonitor.stop()
-                    hoveredRow = nil
-                    model.panelDidDisappear()
-                }
+        .onChange(of: model.isPanelVisible, initial: true) { _, isVisible in
+            if isVisible {
+                scrollMonitor.start(scroll)
+            } else {
+                scrollMonitor.stop()
+                hoveredRow = nil
             }
-        )
+        }
     }
 
     @ViewBuilder
@@ -187,9 +182,7 @@ struct MixerPanel: View {
             }
             Spacer()
             Button {
-                openSettings()
-                // A menu bar app is not active, so the window would open behind the others.
-                NSApp.activate()
+                onOpenSettings()
             } label: {
                 Image(systemName: "gearshape")
                     .frame(width: PanelMetrics.hitTarget, height: PanelMetrics.hitTarget)

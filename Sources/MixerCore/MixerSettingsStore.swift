@@ -103,6 +103,12 @@ public final class MixerSettingsStore {
         }
     }
 
+    /// Every app back to 100%, unmuted, on the system output. Pins stay.
+    public func resetApps() {
+        apps = apps.compactMapValues { $0.isPinned ? AppSettings(isPinned: true) : nil }
+        save()
+    }
+
     public func setOutputPriority(_ priority: OutputPriority) {
         guard priority != outputPriority else { return }
         outputPriority = priority
